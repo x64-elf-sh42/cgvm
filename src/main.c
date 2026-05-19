@@ -9,7 +9,7 @@ int main(int argc, [[maybe_unused]]char *argv[argc+1]) {
   // return status of main. - currently unused.
   int status = 0;
 
-  // test many_lines program
+  // test box draw program. draws moving box. (doesn't clear previous frames yet!)
   prog_t bdraw = boxdraw();
   vm_reset();
   // load program into vm
