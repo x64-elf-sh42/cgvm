@@ -18,13 +18,13 @@ static pmc_counter_t pmcs[] = {
  // { "l2_cache_misses_from_dc_misses", 0, 0, false },
 
 // 2
- // { "ic_cache_fill_l2", 0, 0, false },
- // { "ic_cache_fill_sys", 0, 0, false },
- // { "ic_fetch_stall.ic_stall_any", 0, 0, false },
+ { "ic_cache_fill_l2", 0, 0, false },
+ { "ic_cache_fill_sys", 0, 0, false },
+ { "ic_fetch_stall.ic_stall_any", 0, 0, false },
 
 // 3
-  { "l1_dtlb_misses", 0, 0, false },
-  { "l2_dtlb_misses", 0, 0, false },
+  // { "l1_dtlb_misses", 0, 0, false },
+  // { "l2_dtlb_misses", 0, 0, false },
 
 };
 
