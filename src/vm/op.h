@@ -15,6 +15,7 @@ typedef enum : uint8_t {
   
   // Arithmetic
   OP_ADD_RR,  // Add
+  OP_ADD_RI,
   OP_SUB_RR,  // Sub
   OP_MUL_RR,  // Mul
   OP_DIV_RR,  // Div

@@ -2,7 +2,8 @@
 
 #include <string.h>
 #include <stdint.h>
-
+#include <SDL3/SDL.h>
+#include <unistd.h>
 #ifdef DO_PMC
 #include "pmc_wrap.h"
 #endif
@@ -10,8 +11,56 @@
 
 static vm_t vm = {0};
 
+static void *run_sys(void *args) {
+  
+  vm_t *v = (vm_t*)args;
+  if(!v) {return nullptr;}
+
+  if(!SDL_Init(SDL_INIT_VIDEO)) {
+      fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+      return nullptr;
+  }
+  SDL_Window *window = SDL_CreateWindow("CGVM", v->screen_width, v->screen_height, 0);
+  SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
+  SDL_Texture *texture = SDL_CreateTexture(
+    renderer,
+    SDL_PIXELFORMAT_RGB24,
+    SDL_TEXTUREACCESS_STREAMING,
+    v->screen_width,
+    v->screen_height                                  
+  );
+
+  printf("starting render loop...\n");
+
+  while(atomic_load(&v->running)) {
+    
+    SDL_UpdateTexture(texture, nullptr, &v->fb, v->screen_width*3);
+    SDL_RenderClear(renderer);
+    SDL_RenderTexture(renderer,texture,nullptr,nullptr);
+    SDL_RenderPresent(renderer);
+
+
+    SDL_Delay(1000/vm.refresh_rate); // 24fps'ish?
+  }
+
+  SDL_DestroyTexture(texture);
+  SDL_DestroyRenderer(renderer);
+  SDL_DestroyWindow(window);
+  SDL_Quit();
+ 
+  return nullptr;
+}
+
+
 void vm_reset(void) {
   memset(&vm, 0, sizeof(vm_t));
+  vm.run_system = run_sys;
+  vm.screen_width = FB_WIDTH;
+  vm.screen_height = FB_HEIGHT;
+  vm.refresh_rate=24; // just cap it low  
+  atomic_init(&vm.running, false);
+  vm.program_loaded=false;
+  vm.reset=true;
 }
 
 void vm_load(const prog_t *p) {
@@ -24,8 +73,11 @@ void vm_load(const prog_t *p) {
   }
   memcpy(vm.code, p->code, p->codelen*sizeof(insn_t));
   vm.regs[REG_PC]=p->entry_pc;
-  
+  vm.program_loaded=true;
+  vm.reset=false; 
 }
+
+// PROGRAM EXECUTOR
 static void ve() {
   #define DISPATCH() do {   \
     ins = code[pc];         \
@@ -40,6 +92,7 @@ static void ve() {
     [OP_MOV_RM] = &&op_mov_rm,
     [OP_MOV_MR] = &&op_mov_mr,
     [OP_ADD_RR] = &&op_add_rr,
+    [OP_ADD_RI] = &&op_add_ri,
     [OP_SUB_RR] = &&op_sub_rr,
     [OP_MUL_RR] = &&op_mul_rr,
     [OP_DIV_RR] = &&op_div_rr,
@@ -60,6 +113,7 @@ static void ve() {
   uint32_t pc = regs[REG_PC];
   insn_t ins = 0;
   cpu_flags_t flags = vm.flags;
+
   
   DISPATCH(); // start execution at pc
 
@@ -97,6 +151,10 @@ static void ve() {
   // maths
   op_add_rr:// check for overflow setf
     regs[RR_DST(ins)]+=regs[RR_SRC(ins)];
+    pc++;
+    DISPATCH();
+  op_add_ri:
+    regs[RR_DST(ins)]+=IMM20(ins);
     pc++;
     DISPATCH();
     
@@ -203,7 +261,7 @@ static void ve() {
     
 
 ve_fin:
-      
+
 }
 
 bool vm_run(void) {
@@ -216,8 +274,22 @@ bool vm_run(void) {
   }
 #endif
 
+  // start background_thread
+  // using vm.run_system as thread_fn
+  atomic_store(&vm.running, true);
+
+  pthread_attr_init(&vm.sys_tattr);
+  pthread_create(&vm.sys_thread, &vm.sys_tattr, vm.run_system, &vm);
+
   ve(); // we only want to run PMC on this part as it executes our program.
         // the rest of code is just setup / teardown and saving of results.
+
+  sleep(3);
+  atomic_store(&vm.running, false);
+  // join system background thread
+  pthread_join(vm.sys_thread, NULL);
+  pthread_attr_destroy(&vm.sys_tattr);
+  
 
 #ifdef DO_PMC
   if (have_pmc) {
