@@ -211,13 +211,13 @@ bool vm_run(void) {
 
 #ifdef DO_PMC
   bool have_pmc = vm_pmc_init();
-
   if (have_pmc) {
     vm_pmc_start();
   }
 #endif
 
-  ve();
+  ve(); // we only want to run PMC on this part as it executes our program.
+        // the rest of code is just setup / teardown and saving of results.
 
 #ifdef DO_PMC
   if (have_pmc) {
@@ -231,7 +231,7 @@ bool vm_run(void) {
     fprintf(stderr, "ERR: vm.flags: %08x\n", vm.flags);
   } else {
     bitmap_t b = { vm.fb, 1024, 768 };
-    int r = gfx_save_png(&b, "test.png");
+    int r = gfx_save_png(&b, "test.png"); //  should pass in some path so we can do multiple runs etc. yada yada.
     if (r == 0) {
       status = true;
     } else {

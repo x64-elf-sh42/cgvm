@@ -11,8 +11,10 @@ int main(int argc, [[maybe_unused]]char *argv[argc+1]) {
 
   // test many_lines program
   prog_t bdraw = boxdraw();
+
   // load program into vm
   vm_load(&bdraw);
+
   // run vm to execute program
   vm_run();
 
