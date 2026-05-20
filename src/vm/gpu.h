@@ -7,6 +7,7 @@ struct vm;
 
 struct gpu {
   pixel_t *fb;
+  pixel_t *fb2;
   uint16_t screen_height;
   uint16_t screen_width;
   uint8_t refresh_rate;

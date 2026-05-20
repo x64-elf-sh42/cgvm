@@ -88,6 +88,7 @@ static void ve() {
     [OP_JLE] = &&op_jle,
     [OP_SET_PIXEL] = &&op_set_pixel,
     [OP_FB_CLEAR] = &&op_fb_clear,
+    [OP_FB_SWAP] = &&op_fb_swap
   };
 
   reg_t *regs = vm.regs;
@@ -98,6 +99,7 @@ static void ve() {
   cpu_flags_t flags = vm.flags;
   uint32_t x=0,y=0,c=0;
   pixel_t *fb = vm.gpu->fb;  
+  pixel_t *fb2 = vm.gpu->fb2;
   int screenw = vm.gpu->screen_width;
   int screenh = vm.gpu->screen_height;
   
@@ -256,10 +258,16 @@ static void ve() {
     }
     pc++;
     DISPATCH();
+  op_fb_swap:
+    memcpy(fb2, fb, screenw*screenh*sizeof(pixel_t));
+    pc++;
+    DISPATCH();
+
     
 ve_fin:
 
 }
+
 
 bool vm_run(void) {
   bool status = false;
@@ -281,7 +289,7 @@ bool vm_run(void) {
   while (!vm.gpu || !atomic_load(&vm.gpu->ready)) {
     SDL_Delay(1);
   }
-  
+
   printf("starting program...\n");
   
   ve(); // we only want to run PMC on this part as it executes our program.

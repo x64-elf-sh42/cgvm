@@ -11,8 +11,14 @@ bool gpu_init(vm_t *vm) {
   gpu_t *gpu = &mgpu;
   vm->gpu = &mgpu;
 
-  gpu->fb = calloc(FB_WIDTH*FB_HEIGHT, sizeof(pixel_t));
-  if(!gpu->fb) return false;
+  size_t fbsz = FB_WIDTH*FB_HEIGHT;
+  gpu->fb = calloc(fbsz, sizeof(pixel_t));
+  if(!gpu->fb) { return false; }
+  gpu->fb2 = calloc(fbsz, sizeof(pixel_t));
+  if(!gpu->fb2) { free(gpu->fb); return false; }
+
+  memset(gpu->fb, 0, fbsz);
+  memset(gpu->fb2, 0, fbsz);
 
   if(!SDL_Init(SDL_INIT_VIDEO)) {
       fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
@@ -40,7 +46,7 @@ bool gpu_init(vm_t *vm) {
 }
 
 void gpu_swap(gpu_t *gpu) {
-    SDL_UpdateTexture(gpu->texture, nullptr, gpu->fb, gpu->screen_width*3);
+    SDL_UpdateTexture(gpu->texture, nullptr, gpu->fb2, gpu->screen_width*3);
     SDL_RenderClear(gpu->renderer);
     SDL_RenderTexture(gpu->renderer,gpu->texture,nullptr,nullptr);
     SDL_RenderPresent(gpu->renderer);

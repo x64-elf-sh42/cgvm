@@ -22,6 +22,8 @@ prog_t boxdraw(void) {
   pc = emit_vline(bench_code, pc, hc+100, vc, 100, 0x33ff44);
   pc = emit_hline(bench_code, pc, hc, vc+100, 100, 0x33ff44);
 
+  bench_code[pc++] = ENC_I24(OP_FB_SWAP, 0);
+
   bench_code[pc++] = CMP_RR(REG_R11, REG_R12);
   size_t jmp_tgt = pc+6;
   bench_code[pc++] = JNE(jmp_tgt);

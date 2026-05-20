@@ -40,6 +40,7 @@ typedef enum : uint8_t {
   // graphics
   OP_SET_PIXEL,
   OP_FB_CLEAR,
+  OP_FB_SWAP,
 
   // End
   OP_MAX_OPERATION,
