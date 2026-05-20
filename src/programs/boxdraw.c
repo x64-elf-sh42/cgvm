@@ -9,7 +9,7 @@ prog_t boxdraw(void) {
   uint32_t hc = (1024/2)-50;
   uint32_t vc = (768/2)-50;
 
-  bench_code[pc++] = MOV_RI(REG_R13, 10); // num iterations...
+  bench_code[pc++] = MOV_RI(REG_R13, 4); // num iterations...
   bench_code[pc++] = MOV_RI(REG_R11, 0);
   bench_code[pc++] = MOV_RI(REG_R12, 0);
   bench_code[pc++] = MOV_RI(REG_R9, 100);

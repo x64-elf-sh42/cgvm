@@ -15,8 +15,6 @@
 #define FL_GT 0x4000u
 #define FL_CMP_MASK 0xf000u
 
-
-
 static vm_t vm = {0};
 
 static void *run_sys(void *args) {
@@ -24,48 +22,23 @@ static void *run_sys(void *args) {
   vm_t *v = (vm_t*)args;
   if(!v) {return nullptr;}
 
-  if(!SDL_Init(SDL_INIT_VIDEO)) {
-      fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-      return nullptr;
-  }
-  SDL_Window *window = SDL_CreateWindow("CGVM", v->screen_width, v->screen_height, 0);
-  SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
-  SDL_Texture *texture = SDL_CreateTexture(
-    renderer,
-    SDL_PIXELFORMAT_RGB24,
-    SDL_TEXTUREACCESS_STREAMING,
-    v->screen_width,
-    v->screen_height                                  
-  );
+  gpu_init(v); // contains SDL init so needs to be on render thread.
+  while(!atomic_load(&v->gpu->ready)) {}; // wait for gpu to become ready befor trying rendering..?
 
   printf("starting render loop...\n");
 
   while(atomic_load(&v->running)) {
-    
-    SDL_UpdateTexture(texture, nullptr, &v->fb, v->screen_width*3);
-    SDL_RenderClear(renderer);
-    SDL_RenderTexture(renderer,texture,nullptr,nullptr);
-    SDL_RenderPresent(renderer);
-
-
-    SDL_Delay(1000/vm.refresh_rate); // 24fps'ish?
+    gpu_swap(v->gpu);
+    SDL_Delay(1000/v->gpu->refresh_rate); // 24fps'ish?
   }
 
-  SDL_DestroyTexture(texture);
-  SDL_DestroyRenderer(renderer);
-  SDL_DestroyWindow(window);
-  SDL_Quit();
- 
+  gpu_destroy(v->gpu);
   return nullptr;
 }
-
 
 void vm_reset(void) {
   memset(&vm, 0, sizeof(vm_t));
   vm.run_system = run_sys;
-  vm.screen_width = FB_WIDTH;
-  vm.screen_height = FB_HEIGHT;
-  vm.refresh_rate=60; // just cap it low  
   atomic_init(&vm.running, false);
   vm.program_loaded=false;
   vm.reset=true;
@@ -124,7 +97,9 @@ static void ve() {
   insn_t ins = 0;
   cpu_flags_t flags = vm.flags;
   uint32_t x=0,y=0,c=0;
-  
+  pixel_t *fb = vm.gpu->fb;  
+  int screenw = vm.gpu->screen_width;
+  int screenh = vm.gpu->screen_height;
   
   DISPATCH(); // start execution at pc
 
@@ -264,20 +239,20 @@ static void ve() {
     x = regs[REG_R5];
     y = regs[REG_R6];
     c = IMM24(ins);
-    if(y < FB_HEIGHT && x < FB_WIDTH) {
-      vm.fb[(y*FB_WIDTH)+x].red = (c >> 16) & 0xff;
-      vm.fb[(y*FB_WIDTH)+x].green = (c >> 8) & 0xff;
-      vm.fb[(y*FB_WIDTH)+x].blue = (uint8_t)c;
+    if(y < screenh && x < screenw) {
+      fb[(y*screenw)+x].red = (c >> 16) & 0xff;
+      fb[(y*screenw)+x].green = (c >> 8) & 0xff;
+      fb[(y*screenw)+x].blue = (uint8_t)c;
     }
     pc++;
     DISPATCH();
     
   op_fb_clear:
     c = IMM24(ins);
-    for(uint32_t i=0;i<vm.screen_width*vm.screen_height; i++){
-      vm.fb[i].red = (c>>16)&0xff;
-      vm.fb[i].green = (c>>8)&0xff;
-      vm.fb[i].blue = (uint8_t)c;
+    for(uint32_t i=0;i<screenw*screenh; i++){
+      fb[i].red = (c>>16)&0xff;
+      fb[i].green = (c>>8)&0xff;
+      fb[i].blue = (uint8_t)c;
     }
     pc++;
     DISPATCH();
@@ -303,6 +278,12 @@ bool vm_run(void) {
   pthread_attr_init(&vm.sys_tattr);
   pthread_create(&vm.sys_thread, &vm.sys_tattr, vm.run_system, &vm);
 
+  while (!vm.gpu || !atomic_load(&vm.gpu->ready)) {
+    SDL_Delay(1);
+  }
+  
+  printf("starting program...\n");
+  
   ve(); // we only want to run PMC on this part as it executes our program.
         // the rest of code is just setup / teardown and saving of results.
   printf("program ended. sleeping 2...\n");
@@ -325,7 +306,7 @@ bool vm_run(void) {
   if (vm.flags & 2) {
     fprintf(stderr, "ERR: vm.flags: %08x\n", vm.flags);
   } else {
-    bitmap_t b = { vm.fb, 1024, 768 };
+    bitmap_t b = { vm.gpu->fb, vm.gpu->screen_width, vm.gpu->screen_height };
     int r = gfx_save_png(&b, "test.png"); //  should pass in some path so we can do multiple runs etc. yada yada.
     if (r == 0) {
       status = true;
