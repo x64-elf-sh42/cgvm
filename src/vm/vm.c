@@ -9,6 +9,14 @@
 #endif
 
 
+#define FL_EQ 0x1000u
+#define FL_NE 0x8000u
+#define FL_LT 0x2000u
+#define FL_GT 0x4000u
+#define FL_CMP_MASK 0xf000u
+
+
+
 static vm_t vm = {0};
 
 static void *run_sys(void *args) {
@@ -57,7 +65,7 @@ void vm_reset(void) {
   vm.run_system = run_sys;
   vm.screen_width = FB_WIDTH;
   vm.screen_height = FB_HEIGHT;
-  vm.refresh_rate=24; // just cap it low  
+  vm.refresh_rate=60; // just cap it low  
   atomic_init(&vm.running, false);
   vm.program_loaded=false;
   vm.reset=true;
@@ -94,6 +102,7 @@ static void ve() {
     [OP_ADD_RR] = &&op_add_rr,
     [OP_ADD_RI] = &&op_add_ri,
     [OP_SUB_RR] = &&op_sub_rr,
+    [OP_SUB_RI] = &&op_sub_ri,
     [OP_MUL_RR] = &&op_mul_rr,
     [OP_DIV_RR] = &&op_div_rr,
     [OP_CMP_RR] = &&op_cmp_rr,
@@ -105,6 +114,7 @@ static void ve() {
     [OP_JGE] = &&op_jge,
     [OP_JLE] = &&op_jle,
     [OP_SET_PIXEL] = &&op_set_pixel,
+    [OP_FB_CLEAR] = &&op_fb_clear,
   };
 
   reg_t *regs = vm.regs;
@@ -113,18 +123,21 @@ static void ve() {
   uint32_t pc = regs[REG_PC];
   insn_t ins = 0;
   cpu_flags_t flags = vm.flags;
-
+  uint32_t x=0,y=0,c=0;
+  
   
   DISPATCH(); // start execution at pc
 
 
   // exits
   op_undefined:
+    flags&= ~FL_CMP_MASK;
     flags|=3;
     vm.flags=flags;
     regs[REG_PC]=pc;
     goto ve_fin;   
   op_exit:
+    flags&=~FL_CMP_MASK;
     flags|=1;
     vm.flags=flags;
     regs[REG_PC]=pc;
@@ -162,6 +175,11 @@ static void ve() {
     regs[RR_DST(ins)]-=regs[RR_SRC(ins)];
     pc++;
     DISPATCH();
+
+  op_sub_ri:
+    regs[RR_DST(ins)]-=IMM20(ins);
+    pc++;
+    DISPATCH();
     
   op_mul_rr: // check overflow setf
     regs[RR_DST(ins)]*=regs[RR_SRC(ins)];
@@ -175,16 +193,17 @@ static void ve() {
 
   // comparison/branching
   op_cmp_rr:
+    flags&=~FL_CMP_MASK;
     if(regs[RR_DST(ins)]==regs[RR_SRC(ins)]) {
-      flags|=0x1000; // TODO: document flags
+      flags|=FL_EQ; // TODO: document flags
     } else {
-      flags|=0x6000;
+      flags|=FL_NE;
     }
     if(regs[RR_DST(ins)]<regs[RR_SRC(ins)]) {
-      flags|=0x2000;
+      flags|=FL_LT;
     }
     if(regs[RR_DST(ins)]>regs[RR_SRC(ins)]) {
-      flags|=0x4000;
+      flags|=FL_GT;
     }
     pc++;
     DISPATCH();
@@ -194,8 +213,7 @@ static void ve() {
     DISPATCH();
     
   op_je:
-    if(flags&0x1000) {
-      flags &= (uint32_t)~0x1000;
+    if(flags&FL_EQ) {
       pc=IMM24(ins);
     } else {
       pc++;
@@ -203,8 +221,7 @@ static void ve() {
     DISPATCH();
 
   op_jne:
-    if(flags&0x6000) {
-      flags &= (uint32_t)~0x6000;
+    if(flags&FL_NE) {
       pc=IMM24(ins);
     } else {
       pc++;
@@ -212,8 +229,7 @@ static void ve() {
     DISPATCH();
 
   op_jg:
-    if(flags&0x2000) {
-      flags &= (uint32_t)~0x2000;
+    if(flags&FL_GT && flags&FL_NE) {
       pc=IMM24(ins);
     } else {
       pc++;
@@ -221,8 +237,7 @@ static void ve() {
     DISPATCH();
     
   op_jl:
-    if(flags&0x4000) {
-      flags &= (uint32_t)~0x4000;
+    if(flags&FL_LT && flags&FL_NE) {
       pc=IMM24(ins);
     } else {
       pc++;
@@ -230,16 +245,14 @@ static void ve() {
     DISPATCH();
 
   op_jge:
-    if(flags&0x2000 || flags&0x1000) {
-      flags &= (uint32_t)~0x3000;
+    if(flags&FL_GT || flags&FL_EQ) {
       pc=IMM24(ins);
     } else {
       pc++;
     }
     DISPATCH();
   op_jle:
-    if(flags&0x4000 || flags&0x1000) {
-      flags &= (uint32_t)~(0x5000);
+    if(flags&FL_LT || flags&FL_EQ) {
       pc=IMM24(ins);
     } else {
       pc++;
@@ -248,9 +261,9 @@ static void ve() {
 
   // graphics
   op_set_pixel: // set pixel from x:r5,y:r6 to color encoded in imm24
-    uint32_t x = regs[REG_R5];
-    uint32_t y = regs[REG_R6];
-    uint32_t c = IMM24(ins);
+    x = regs[REG_R5];
+    y = regs[REG_R6];
+    c = IMM24(ins);
     if(y < FB_HEIGHT && x < FB_WIDTH) {
       vm.fb[(y*FB_WIDTH)+x].red = (c >> 16) & 0xff;
       vm.fb[(y*FB_WIDTH)+x].green = (c >> 8) & 0xff;
@@ -259,7 +272,16 @@ static void ve() {
     pc++;
     DISPATCH();
     
-
+  op_fb_clear:
+    c = IMM24(ins);
+    for(uint32_t i=0;i<vm.screen_width*vm.screen_height; i++){
+      vm.fb[i].red = (c>>16)&0xff;
+      vm.fb[i].green = (c>>8)&0xff;
+      vm.fb[i].blue = (uint8_t)c;
+    }
+    pc++;
+    DISPATCH();
+    
 ve_fin:
 
 }
@@ -283,8 +305,9 @@ bool vm_run(void) {
 
   ve(); // we only want to run PMC on this part as it executes our program.
         // the rest of code is just setup / teardown and saving of results.
-
-  sleep(3);
+  printf("program ended. sleeping 2...\n");
+  sleep(2); // just stall a bit to show some screen if its short run...
+            // everything is fkin instant
   atomic_store(&vm.running, false);
   // join system background thread
   pthread_join(vm.sys_thread, NULL);

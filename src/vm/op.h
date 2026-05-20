@@ -17,6 +17,7 @@ typedef enum : uint8_t {
   OP_ADD_RR,  // Add
   OP_ADD_RI,
   OP_SUB_RR,  // Sub
+  OP_SUB_RI,
   OP_MUL_RR,  // Mul
   OP_DIV_RR,  // Div
   
@@ -38,7 +39,7 @@ typedef enum : uint8_t {
 
   // graphics
   OP_SET_PIXEL,
-
+  OP_FB_CLEAR,
 
   // End
   OP_MAX_OPERATION,
