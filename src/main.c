@@ -2,6 +2,7 @@
 
 #include "programs/manylines.h"
 #include "programs/boxdraw.h"
+#include "util.h"
 
 extern const prog_t line_draw;
 
@@ -11,6 +12,10 @@ int main(int argc, [[maybe_unused]]char *argv[argc+1]) {
 
   // test box draw program. draws moving box. (doesn't clear previous frames yet!)
   prog_t bdraw = boxdraw();
+  
+  printf("======== [PROGRAM] ========\n");
+  dump_hex(bdraw.code, bdraw.codelen*sizeof(uint32_t));
+  printf("===========================\n");
   vm_reset();
   // load program into vm
   vm_load(&bdraw);

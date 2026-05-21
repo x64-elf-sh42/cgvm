@@ -105,8 +105,8 @@ static void ve() {
   uint32_t x=0,y=0,c=0;
   pixel_t *fb = vm.gpu->fb;  
   pixel_t *fb2 = vm.gpu->fb2;
-  int screenw = vm.gpu->screen_width;
-  int screenh = vm.gpu->screen_height;
+  size_t screenw = (size_t)vm.gpu->screen_width;
+  size_t screenh = (size_t)vm.gpu->screen_height;
   
   DISPATCH(); // start execution at pc
 
