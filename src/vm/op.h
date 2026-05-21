@@ -23,6 +23,7 @@ typedef enum : uint8_t {
   
   // branching & comparisson
   OP_CMP_RR,  // Cmp
+  OP_CMP_RI,
   OP_JMP,   // Jmp -> [Reg]
   OP_JE,    // 
   OP_JNE,

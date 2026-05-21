@@ -11,9 +11,8 @@ prog_t boxdraw(void) {
 
   bench_code[pc++] = MOV_RI(REG_R13, 4); // num iterations...
   bench_code[pc++] = MOV_RI(REG_R11, 0);
-  bench_code[pc++] = MOV_RI(REG_R12, 0);
   bench_code[pc++] = MOV_RI(REG_R9, 100);
-  bench_code[pc++] = MOV_RI(REG_R10, 300);
+
 
   size_t loop = pc;
   bench_code[pc++] = ENC_I24(OP_FB_CLEAR, 0);
@@ -24,22 +23,22 @@ prog_t boxdraw(void) {
 
   bench_code[pc++] = ENC_I24(OP_FB_SWAP, 0);
 
-  bench_code[pc++] = CMP_RR(REG_R11, REG_R12);
+  bench_code[pc++] = CMP_RR(REG_R11, 0);
   size_t jmp_tgt = pc+6;
   bench_code[pc++] = JNE(jmp_tgt);
   bench_code[pc++] = ADD_RI(REG_R9, 1);
-  bench_code[pc++] = CMP_RR(REG_R9, REG_R10);
+  bench_code[pc++] = CMP_RI(REG_R9, 300);
   bench_code[pc++] = JL(loop);  
   bench_code[pc++] = MOV_RI(REG_R11, 1);
   bench_code[pc++] = JMP(loop);
   
   bench_code[pc++] = SUB_RI(REG_R9, 1);
-  bench_code[pc++] = CMP_RR(REG_R9, REG_R12);
+  bench_code[pc++] = CMP_RR(REG_R9, 0);
   bench_code[pc++] = JG(loop);
   bench_code[pc++] = MOV_RI(REG_R11, 0);
 
   bench_code[pc++] = SUB_RI(REG_R13, 1);
-  bench_code[pc++] = CMP_RR(REG_R13, REG_R12);
+  bench_code[pc++] = CMP_RR(REG_R13, 0);
   bench_code[pc++] = JG(loop);
   bench_code[pc++] = EXIT();
 

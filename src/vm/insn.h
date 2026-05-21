@@ -39,6 +39,7 @@ typedef uint32_t insn_t;
 #define ADD_RI(a, v)   ENC_RI(OP_ADD_RI, a, v)
 #define SUB_RI(a, v)   ENC_RI(OP_SUB_RI, a, v)
 #define CMP_RR(a, b)   ENC_RR(OP_CMP_RR, a, b)
+#define CMP_RI(a, v)   ENC_RI(OP_CMP_RI, a, v)
 #define JL(addr)       ENC_I24(OP_JL, addr)
 #define JG(addr)       ENC_I24(OP_JG, addr)
 #define JNE(addr)      ENC_I24(OP_JNE, addr)

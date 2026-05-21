@@ -41,7 +41,11 @@ void vm_reset(void) {
   vm.run_system = run_sys;
   atomic_init(&vm.running, false);
   vm.program_loaded=false;
+  vm.io_space = io_space_get();
   vm.reset=true;
+
+  // reset io/gpu?
+
 }
 
 void vm_load(const prog_t *p) {
@@ -79,6 +83,7 @@ static void ve() {
     [OP_MUL_RR] = &&op_mul_rr,
     [OP_DIV_RR] = &&op_div_rr,
     [OP_CMP_RR] = &&op_cmp_rr,
+    [OP_CMP_RI] = &&op_cmp_ri,
     [OP_JMP] = &&op_jmp,
     [OP_JE] = &&op_je,
     [OP_JNE] = &&op_jne,
@@ -171,20 +176,30 @@ static void ve() {
   // comparison/branching
   op_cmp_rr:
     flags&=~FL_CMP_MASK;
-    if(regs[RR_DST(ins)]==regs[RR_SRC(ins)]) {
+    y = regs[RR_DST(ins)];
+    x = regs[RR_SRC(ins)];    
+    goto op_cmp;
+  op_cmp_ri:
+    flags&=~FL_CMP_MASK;
+    y = regs[RR_DST(ins)];
+    x = IMM20(ins);
+    goto op_cmp; // could fallthru
+
+ op_cmp: 
+    if(y==x) {
       flags|=FL_EQ; // TODO: document flags
     } else {
       flags|=FL_NE;
     }
-    if(regs[RR_DST(ins)]<regs[RR_SRC(ins)]) {
+    if(y<x) {
       flags|=FL_LT;
     }
-    if(regs[RR_DST(ins)]>regs[RR_SRC(ins)]) {
+    if(y>x) {
       flags|=FL_GT;
     }
     pc++;
     DISPATCH();
-        
+       
  op_jmp: // TODO -> set PC, need to bounds check
     pc=IMM24(ins);
     DISPATCH();
@@ -294,9 +309,7 @@ bool vm_run(void) {
   
   ve(); // we only want to run PMC on this part as it executes our program.
         // the rest of code is just setup / teardown and saving of results.
-  printf("program ended. sleeping 2...\n");
-  sleep(2); // just stall a bit to show some screen if its short run...
-            // everything is fkin instant
+
   atomic_store(&vm.running, false);
   // join system background thread
   pthread_join(vm.sys_thread, NULL);

@@ -11,6 +11,7 @@
 #include <stdatomic.h>
 #include <pthread.h>
 #include "gpu.h"
+#include "io.h"
 
 typedef void *(*system_thread)(void*);
 struct gpu;
@@ -21,7 +22,7 @@ struct vm {
   uint8_t data[DATA_SIZE];
   insn_t code[CODE_SIZE];
   struct gpu *gpu;
-
+  io_space_t io_space;
   pthread_t sys_thread;
   pthread_attr_t sys_tattr;
   system_thread run_system;
