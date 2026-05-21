@@ -12,6 +12,7 @@ struct io_port {
   mem_ptr_t buffer;
   io_handler_t handler;
   uint8_t op_size; // 1/2/4/8 bytes per I/O
+  bool is_used;
   bool pending_events;
 };
 typedef struct io_port io_port_t;

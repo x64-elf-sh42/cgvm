@@ -22,7 +22,7 @@ bool io_port_create(uint8_t port_index, uint8_t op_size, IO_DIRECTION direction,
   io_list[port_index].op_size = op_size;
   io_list[port_index].handler = handler;
   io_list[port_index].pending_events=false;
-    
+  io_list[port_index].is_used=true;    
   return true;
 }
 void io_port_destroy(uint8_t port_index, IO_DIRECTION direction) {
@@ -38,6 +38,7 @@ void io_port_destroy(uint8_t port_index, IO_DIRECTION direction) {
       return;
   }
 
+  io_list[port_index].is_used=false;
   if(io_list[port_index].buffer.v) {
     free(io_list[port_index].buffer.v);
   }

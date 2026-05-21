@@ -16,6 +16,7 @@ int main(int argc, [[maybe_unused]]char *argv[argc+1]) {
   printf("======== [PROGRAM] ========\n");
   dump_hex(bdraw.code, bdraw.codelen*sizeof(uint32_t));
   printf("===========================\n");
+
   vm_reset();
   // load program into vm
   vm_load(&bdraw);

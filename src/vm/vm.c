@@ -43,9 +43,7 @@ void vm_reset(void) {
   vm.program_loaded=false;
   vm.io_space = io_space_get();
   vm.reset=true;
-
-  // reset io/gpu?
-
+  vm.time_slice_length = 50000; // random choice!
 }
 
 void vm_load(const prog_t *p) {
@@ -63,11 +61,15 @@ void vm_load(const prog_t *p) {
 }
 
 // PROGRAM EXECUTOR
-static void ve() {
+static bool ve(size_t budget) {
   #define DISPATCH() do {   \
+    budget--;               \
+    if(!budget) {           \
+        goto slice_end_ok;  \
+    }                       \
     ins = code[pc];         \
     goto *dispatch[OP(ins)]; \
-  } while(0)
+  } while(1)
 
   static void *dispatch[OP_MAX_OPERATION] = {
     [OP_UNDEFINED] = &&op_undefined,
@@ -96,6 +98,8 @@ static void ve() {
     [OP_FB_SWAP] = &&op_fb_swap
   };
 
+
+
   reg_t *regs = vm.regs;
   insn_t *code = vm.code;
   uint8_t *data = vm.data;
@@ -109,8 +113,7 @@ static void ve() {
   size_t screenh = (size_t)vm.gpu->screen_height;
   
   DISPATCH(); // start execution at pc
-
-
+  
   // exits
   op_undefined:
     flags&= ~FL_CMP_MASK;
@@ -118,6 +121,7 @@ static void ve() {
     vm.flags=flags;
     regs[REG_PC]=pc;
     goto ve_fin;   
+
   op_exit:
     flags&=~FL_CMP_MASK;
     flags|=1;
@@ -130,14 +134,17 @@ static void ve() {
     regs[RR_DST(ins)] = regs[RR_SRC(ins)];
     pc++;
     DISPATCH();
+
   op_mov_ri:
     regs[RR_DST(ins)] = IMM20(ins);
     pc++;
     DISPATCH();
+
   op_mov_mr:
     regs[RR_DST(ins)] = data[IMM20(ins)];
     pc++;
     DISPATCH();
+
   op_mov_rm:
     data[IMM20(ins)] = (uint8_t)regs[RR_DST(ins)]; // dst is first one in struct
     pc++;
@@ -148,6 +155,7 @@ static void ve() {
     regs[RR_DST(ins)]+=regs[RR_SRC(ins)];
     pc++;
     DISPATCH();
+
   op_add_ri:
     regs[RR_DST(ins)]+=IMM20(ins);
     pc++;
@@ -179,6 +187,7 @@ static void ve() {
     y = regs[RR_DST(ins)];
     x = regs[RR_SRC(ins)];    
     goto op_cmp;
+
   op_cmp_ri:
     flags&=~FL_CMP_MASK;
     y = regs[RR_DST(ins)];
@@ -243,6 +252,7 @@ static void ve() {
       pc++;
     }
     DISPATCH();
+
   op_jle:
     if(flags&FL_LT || flags&FL_EQ) {
       pc=IMM24(ins);
@@ -273,14 +283,17 @@ static void ve() {
     }
     pc++;
     DISPATCH();
+
   op_fb_swap:
     memcpy(fb2, fb, screenw*screenh*sizeof(pixel_t));
     pc++;
     DISPATCH();
 
-    
+  slice_end_ok:
+    regs[REG_PC]=pc;
+    return true;         
 ve_fin:
-
+  return false;
 }
 
 
@@ -306,9 +319,26 @@ bool vm_run(void) {
   }
 
   printf("starting program...\n");
+
+  size_t slices_taken=0;  
+  double last = time_now_sec();
   
-  ve(); // we only want to run PMC on this part as it executes our program.
+  while(1){
+    double now = time_now_sec();
+    double dt = now - last;
+    last=now;
+    vm.fpregs[FP_REG_DT]=dt;
+    bool x = ve(vm.time_slice_length);
+
+    slices_taken++;
+    if(!x) {
+      break;
+    }
+    
+  }; // we only want to run PMC on this part as it executes our program.
         // the rest of code is just setup / teardown and saving of results.
+
+  printf("program execution took %zu time-slices\n", slices_taken);
 
   atomic_store(&vm.running, false);
   // join system background thread

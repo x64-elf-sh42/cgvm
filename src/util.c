@@ -1,4 +1,5 @@
 #include "util.h"
+
 void dump_hex(const void *data, size_t size) {
     const unsigned char *p = data;
     for (size_t i = 0; i < size; i += 16) {
@@ -26,4 +27,10 @@ void dump_hex(const void *data, size_t size) {
         }
         printf("\n");
     }
+}
+
+double time_now_sec(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1000000000.0;
 }

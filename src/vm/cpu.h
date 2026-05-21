@@ -3,8 +3,10 @@
 #include <stdint.h>
 
 #define MAX_REGS 16
+#define MAX_FP_REGS 16
 
 typedef uint32_t reg_t;
+typedef double fp_reg_t;
 typedef uint32_t cpu_flags_t;
 
 typedef enum : uint8_t {
@@ -26,4 +28,7 @@ typedef enum : uint8_t {
   REG_R15 = 15,
 } REG_NAME;
 
+typedef enum : uint8_t {
+  FP_REG_DT=0,
+} FP_REG_NAME;
 

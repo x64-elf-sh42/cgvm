@@ -24,14 +24,13 @@ const prog_t line_draw = {
   .data=(uint8_t [1]){100},
   .datalen=1,
   .code=(insn_t [9]) {
-     MOV_RI(REG_R7, 1),        // used to increment. might want inc/dec insns
-    MOV_RI(REG_R8, 200),      // target value (100 -> 200)
+    MOV_RI(REG_R7, 1),        // used to increment. might want inc/dec insns
     MOV_MR(REG_R5, 0),        // read data[0] (100) into R5 as x coordinate
     MOV_MR(REG_R6, 0),        // read data[0] (100) into R6 as y coordinate 
     PIXEL(0x33ff44),          // draw pixel at x,y with colour 0x33ff44
     ADD_RR(REG_R5, REG_R7),   // increment r5
-    CMP_RR(REG_R5, REG_R8),   // check if r5 is at our target value
-    JL(4),                    // loop back to set_pixel while r5 < r8
+    CMP_RI(REG_R5, 200),   // check if r5 is at our target value
+    JL(3),                    // loop back to set_pixel while r5 < r8
     EXIT(),  
   },
   .codelen=9

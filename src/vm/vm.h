@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include "gpu.h"
 #include "io.h"
+#include "../util.h"
 
 typedef void *(*system_thread)(void*);
 struct gpu;
@@ -19,6 +20,7 @@ struct gpu;
 struct vm {
   cpu_flags_t flags;
   reg_t regs[MAX_REGS];
+  fp_reg_t fpregs[MAX_FP_REGS];
   uint8_t data[DATA_SIZE];
   insn_t code[CODE_SIZE];
   struct gpu *gpu;
@@ -26,6 +28,7 @@ struct vm {
   pthread_t sys_thread;
   pthread_attr_t sys_tattr;
   system_thread run_system;
+  size_t time_slice_length;
   atomic_bool running; // should be atomic
   bool program_loaded;
   bool reset;
