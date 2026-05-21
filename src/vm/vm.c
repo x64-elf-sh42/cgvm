@@ -29,7 +29,7 @@ static void *run_sys(void *args) {
 
   while(atomic_load(&v->running)) {
     gpu_swap(v->gpu);
-    SDL_Delay(1000/v->gpu->refresh_rate); // 24fps'ish?
+    SDL_Delay(1000/v->gpu->refresh_rate);
   }
 
   gpu_destroy(v->gpu);
@@ -116,22 +116,19 @@ static bool ve(size_t budget) {
   pixel_t *fb2 = vm.gpu->fb2;
   size_t screenw = (size_t)vm.gpu->screen_width;
   size_t screenh = (size_t)vm.gpu->screen_height;
-  
+  bool ret=false;
+    
   DISPATCH(); // start execution at pc
   
   // exits
   op_undefined:
     flags&= ~FL_CMP_MASK;
     flags|=3;
-    vm.flags=flags;
-    regs[REG_PC]=pc;
     goto ve_fin;   
 
   op_exit:
     flags&=~FL_CMP_MASK;
     flags|=1;
-    vm.flags=flags;
-    regs[REG_PC]=pc;
     goto ve_fin;
 
   // mov
@@ -331,11 +328,14 @@ static bool ve(size_t budget) {
     pc++;
     DISPATCH();
 
+
+
   slice_end_ok:
-    regs[REG_PC]=pc;
-    return true;         
+    ret=true;
 ve_fin:
-  return false;
+  vm.flags=flags;
+  regs[REG_PC]=pc;
+  return ret;
 }
 
 
