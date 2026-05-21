@@ -1,6 +1,6 @@
 # CGVM
 
-| Draws
+| Draws badly with great difficulty.
 
 1. Requires libPNG, SDL3.
 
