@@ -74,6 +74,7 @@ static size_t ve(size_t budget) {
   static void *dispatch[OP_MAX_OPERATION] = {
     [OP_UNDEFINED] = &&op_undefined,
     [OP_EXIT] = &&op_exit,
+    [OP_YIELD] = &&op_yield,
     [OP_MOV_RR] = &&op_mov_rr,
     [OP_MOV_RI] = &&op_mov_ri,
     [OP_MOV_RM] = &&op_mov_rm,
@@ -131,6 +132,11 @@ static size_t ve(size_t budget) {
     flags&=~FL_CMP_MASK;
     flags|=1;
     ret=-1; // signal normal exit to scheduler
+    goto ve_fin;
+
+  op_yield:
+    ret=budget;
+    pc++;
     goto ve_fin;
 
   // mov
@@ -386,6 +392,7 @@ bool vm_run(void) {
       break;
     } else {
       // handle YIELD
+      printf("OP_YIELD\n");
       x = ve(x); // we exited before time-slice was over (YIELD)
                  // so we will complete the slice. (this might not be needed really..)
       goto check_x;

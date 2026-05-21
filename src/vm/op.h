@@ -6,7 +6,8 @@ typedef enum : uint8_t {
 
   // VM Exits
   OP_EXIT,
-  
+  OP_YIELD,
+    
   // data movement
   OP_MOV_RR,  // Mov
   OP_MOV_RI,
