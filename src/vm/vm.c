@@ -8,7 +8,6 @@
 #include "pmc_wrap.h"
 #endif
 
-
 #define FL_EQ 0x1000u
 #define FL_NE 0x8000u
 #define FL_LT 0x2000u
@@ -43,7 +42,7 @@ void vm_reset(void) {
   vm.program_loaded=false;
   vm.io_space = io_space_get();
   vm.reset=true;
-  vm.time_slice_length = 50000; // random choice!
+  vm.time_slice_length = TIMESLICE_LENGTH;
 }
 
 void vm_load(const prog_t *p) {
@@ -161,7 +160,7 @@ static size_t ve(size_t budget) {
     DISPATCH();
 
   // maths
-  op_add_rr:// check for overflow setf
+  op_add_rr:
     regs[RR_DST(ins)]+=regs[RR_SRC(ins)];
     pc++;
     DISPATCH();
@@ -171,7 +170,7 @@ static size_t ve(size_t budget) {
     pc++;
     DISPATCH();
     
-  op_sub_rr: // check underflow setf
+  op_sub_rr:
     regs[RR_DST(ins)]-=regs[RR_SRC(ins)];
     pc++;
     DISPATCH();
@@ -181,17 +180,16 @@ static size_t ve(size_t budget) {
     pc++;
     DISPATCH();
     
-  op_mul_rr: // check overflow setf
+  op_mul_rr:
     regs[RR_DST(ins)]*=regs[RR_SRC(ins)];
     pc++;
     DISPATCH();
     
-  op_div_rr: // todo check for div0
+  op_div_rr:
     regs[RR_DST(ins)]/=regs[RR_SRC(ins)];
     pc++;
     DISPATCH();
 
-  // should do 0-check to prevent div0
   op_fadd_rr:
     fpregs[RR_DST(ins)]+=fpregs[RR_SRC(ins)];
     pc++;
@@ -244,7 +242,7 @@ static size_t ve(size_t budget) {
     
   op_cmp: 
     if(y==x) {
-      flags|=FL_EQ; // TODO: document flags
+      flags|=FL_EQ;
     } else {
       flags|=FL_NE;
     }
@@ -256,7 +254,7 @@ static size_t ve(size_t budget) {
     pc++;
     DISPATCH();
        
- op_jmp: // TODO -> set PC, need to bounds check
+ op_jmp:
     pc=IMM24(ins);
     DISPATCH();
     
@@ -309,7 +307,7 @@ static size_t ve(size_t budget) {
     DISPATCH();
 
   // graphics
-  op_set_pixel: // set pixel from x:r5,y:r6 to color encoded in imm24
+  op_set_pixel:
     x = regs[REG_R5];
     y = regs[REG_R6];
     c = IMM24(ins);
@@ -357,8 +355,6 @@ bool vm_run(void) {
   }
 #endif
 
-  // start background_thread
-  // using vm.run_system as thread_fn
   atomic_store(&vm.running, true);
 
   pthread_attr_init(&vm.sys_tattr);
@@ -374,10 +370,6 @@ bool vm_run(void) {
   double last = time_now_sec();
   
   while(1){
-    // pass delta-time into VM's DT register
-    // so it can know wall-clock time passed
-    // between its time-slices.
-    // this will be needed for smooth animations.
     double now = time_now_sec();
     double dt = now - last;
     last=now;
@@ -388,23 +380,21 @@ bool vm_run(void) {
     if(!x) {
       slices_taken++;
     } else if(x == -1) {
-      slices_taken++; // partial slice. we count it. (really not relevant..)
+      slices_taken++; // dont really need. could uses exit_statusses
       break;
     } else {
-      // handle YIELD
-      printf("OP_YIELD\n");
-      x = ve(x); // we exited before time-slice was over (YIELD)
-                 // so we will complete the slice. (this might not be needed really..)
+      // OP_YIELD
+      
+      x = ve(x);
       goto check_x;
     }
     
-  }; // we only want to run PMC on this part as it executes our program.
-        // the rest of code is just setup / teardown and saving of results.
-
+  };
+  
   printf("program execution took %zu time-slices\n", slices_taken);
 
   atomic_store(&vm.running, false);
-  // join system background thread
+
   pthread_join(vm.sys_thread, NULL);
   pthread_attr_destroy(&vm.sys_tattr);
   
@@ -421,7 +411,7 @@ bool vm_run(void) {
     fprintf(stderr, "ERR: vm.flags: %08x\n", vm.flags);
   } else {
     bitmap_t b = { vm.gpu->fb, vm.gpu->screen_width, vm.gpu->screen_height };
-    int r = gfx_save_png(&b, "test.png"); //  should pass in some path so we can do multiple runs etc. yada yada.
+    int r = gfx_save_png(&b, "test.png");
     if (r == 0) {
       status = true;
     } else {

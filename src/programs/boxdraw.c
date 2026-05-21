@@ -11,7 +11,6 @@ prog_t boxdraw(void) {
   uint32_t vc = (768/2)-(box_dim/2);
   uint32_t num_iterations = 2;
   
-
   bench_code[pc++] = MOV_RI(REG_R13, num_iterations); // num iterations...
   bench_code[pc++] = MOV_RI(REG_R11, 0);
   bench_code[pc++] = MOV_RI(REG_R9, box_dim);

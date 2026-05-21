@@ -4,6 +4,7 @@
 
 #define MAX_REGS 16
 #define MAX_FP_REGS 16
+#define TIMESLICE_LENGTH 50000
 
 typedef uint32_t reg_t;
 typedef double fp_reg_t;
