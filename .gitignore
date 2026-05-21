@@ -1,3 +1,4 @@
 *.elf
 *.core
 vgcore*
+test.png
