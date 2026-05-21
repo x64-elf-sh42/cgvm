@@ -116,7 +116,7 @@ static size_t ve(size_t budget) {
   pixel_t *fb2 = vm.gpu->fb2;
   size_t screenw = (size_t)vm.gpu->screen_width;
   size_t screenh = (size_t)vm.gpu->screen_height;
-  size_t ret=false;
+  size_t ret=0;
     
   DISPATCH(); // start execution at pc
   
