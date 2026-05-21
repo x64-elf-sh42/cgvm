@@ -84,8 +84,13 @@ static bool ve(size_t budget) {
     [OP_SUB_RI] = &&op_sub_ri,
     [OP_MUL_RR] = &&op_mul_rr,
     [OP_DIV_RR] = &&op_div_rr,
+    [OP_FADD_RR] = &&op_fadd_rr,
+    [OP_FSUB_RR] = &&op_fsub_rr,
+    [OP_FMUL_RR] = &&op_fmul_rr,
+    [OP_FDIV_RR] = &&op_fdiv_rr,  
     [OP_CMP_RR] = &&op_cmp_rr,
     [OP_CMP_RI] = &&op_cmp_ri,
+    [OP_FCMP_RR] = &&op_fcmp_rr,
     [OP_JMP] = &&op_jmp,
     [OP_JE] = &&op_je,
     [OP_JNE] = &&op_jne,
@@ -98,15 +103,15 @@ static bool ve(size_t budget) {
     [OP_FB_SWAP] = &&op_fb_swap
   };
 
-
-
   reg_t *regs = vm.regs;
+  fp_reg_t *fpregs = vm.fpregs;
   insn_t *code = vm.code;
   uint8_t *data = vm.data;
   uint32_t pc = regs[REG_PC];
   insn_t ins = 0;
   cpu_flags_t flags = vm.flags;
   uint32_t x=0,y=0,c=0;
+  double dx=0,dy=0;
   pixel_t *fb = vm.gpu->fb;  
   pixel_t *fb2 = vm.gpu->fb2;
   size_t screenw = (size_t)vm.gpu->screen_width;
@@ -181,7 +186,31 @@ static bool ve(size_t budget) {
     pc++;
     DISPATCH();
 
+  // should do 0-check to prevent div0
+  op_fadd_rr:
+    fpregs[RR_DST(ins)]+=fpregs[RR_SRC(ins)];
+    pc++;
+    DISPATCH();
+  op_fsub_rr:
+    fpregs[RR_DST(ins)]-=fpregs[RR_SRC(ins)];
+    pc++;
+    DISPATCH();
+  op_fmul_rr:
+    fpregs[RR_DST(ins)]*=fpregs[RR_SRC(ins)];
+    pc++;
+    DISPATCH();
+  op_fdiv_rr:
+    fpregs[RR_DST(ins)]/=fpregs[RR_SRC(ins)];
+    pc++;
+    DISPATCH();
+
   // comparison/branching
+  op_fcmp_rr:
+    flags&=~FL_CMP_MASK;
+    dy = fpregs[RR_DST(ins)];
+    dx = fpregs[RR_SRC(ins)];
+    goto op_fcmp;
+        
   op_cmp_rr:
     flags&=~FL_CMP_MASK;
     y = regs[RR_DST(ins)];
@@ -192,9 +221,23 @@ static bool ve(size_t budget) {
     flags&=~FL_CMP_MASK;
     y = regs[RR_DST(ins)];
     x = IMM20(ins);
-    goto op_cmp; // could fallthru
+    goto op_cmp;
 
- op_cmp: 
+  op_fcmp:
+    if(dy==dx) {
+      flags|=FL_EQ;
+    }  else {
+      flags|=FL_NE;
+    }
+    if(y<x) {
+      flags|=FL_LT;
+    } else if(y>x) {
+      flags|=FL_GT;
+    }
+    pc++;
+    DISPATCH();
+    
+  op_cmp: 
     if(y==x) {
       flags|=FL_EQ; // TODO: document flags
     } else {
@@ -202,8 +245,7 @@ static bool ve(size_t budget) {
     }
     if(y<x) {
       flags|=FL_LT;
-    }
-    if(y>x) {
+    } else if(y>x) {
       flags|=FL_GT;
     }
     pc++;
