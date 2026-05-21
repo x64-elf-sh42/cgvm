@@ -61,7 +61,7 @@ void vm_load(const prog_t *p) {
 }
 
 // PROGRAM EXECUTOR
-static bool ve(size_t budget) {
+static size_t ve(size_t budget) {
   #define DISPATCH() do {   \
     budget--;               \
     if(!budget) {           \
@@ -116,7 +116,7 @@ static bool ve(size_t budget) {
   pixel_t *fb2 = vm.gpu->fb2;
   size_t screenw = (size_t)vm.gpu->screen_width;
   size_t screenh = (size_t)vm.gpu->screen_height;
-  bool ret=false;
+  size_t ret=false;
     
   DISPATCH(); // start execution at pc
   
@@ -124,11 +124,13 @@ static bool ve(size_t budget) {
   op_undefined:
     flags&= ~FL_CMP_MASK;
     flags|=3;
+    ret=-1; // signal normal exit to scheduler
     goto ve_fin;   
 
   op_exit:
     flags&=~FL_CMP_MASK;
     flags|=1;
+    ret=-1; // signal normal exit to scheduler
     goto ve_fin;
 
   // mov
@@ -331,7 +333,7 @@ static bool ve(size_t budget) {
 
 
   slice_end_ok:
-    ret=true;
+    ret=budget;
 ve_fin:
   vm.flags=flags;
   regs[REG_PC]=pc;
@@ -366,15 +368,27 @@ bool vm_run(void) {
   double last = time_now_sec();
   
   while(1){
+    // pass delta-time into VM's DT register
+    // so it can know wall-clock time passed
+    // between its time-slices.
+    // this will be needed for smooth animations.
     double now = time_now_sec();
     double dt = now - last;
     last=now;
     vm.fpregs[FP_REG_DT]=dt;
-    bool x = ve(vm.time_slice_length);
 
-    slices_taken++;
+    size_t x = ve(vm.time_slice_length);
+  check_x:
     if(!x) {
+      slices_taken++;
+    } else if(x == -1) {
+      slices_taken++; // partial slice. we count it. (really not relevant..)
       break;
+    } else {
+      // handle YIELD
+      x = ve(x); // we exited before time-slice was over (YIELD)
+                 // so we will complete the slice. (this might not be needed really..)
+      goto check_x;
     }
     
   }; // we only want to run PMC on this part as it executes our program.
