@@ -2,3 +2,6 @@
 *.core
 vgcore*
 test.png
+
+# Local development notes, session handoffs, and scratch work.
+/.dev-notes/

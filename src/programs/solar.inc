@@ -21,7 +21,7 @@
 #define S_COARSE (30000u+S_COUNT*4800u)
 static uint8_t solar_data[S_COARSE+S_COUNT*1200u];
 /* Catalogue order is stable: original planet IDs are retained. Distances in km.
- * Satellite distances are measured from the parent center. See doc/solar-system.md. */
+ * Satellite distances are measured from the parent center. See docs/solar-system.md. */
 static const char *solar_names[S_CATALOG]={"SOL","MERCURY","VENUS","EARTH","MARS","JUPITER","SATURN","URANUS","NEPTUNE","PLUTO",
   "MOON","PHOBOS","DEIMOS","IO","EUROPA","GANYMEDE","CALLISTO","TITAN","ENCELADUS","TITANIA","OBERON","TRITON","CHARON","CERES","VESTA"};
 static double solar_radii[S_COUNT]={695700,2439.5,6052,6378,3396,71492,60268,25559,24764,1188.3,
