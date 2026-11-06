@@ -1,423 +1,64 @@
 #include "vm.h"
-
+#include "machine.h"
 #include <string.h>
-#include <stdint.h>
-#include <SDL3/SDL.h>
-#include <unistd.h>
-#ifdef DO_PMC
-#include "pmc_wrap.h"
-#endif
-
-#define FL_EQ 0x1000u
-#define FL_NE 0x8000u
-#define FL_LT 0x2000u
-#define FL_GT 0x4000u
-#define FL_CMP_MASK 0xf000u
-
-static vm_t vm = {0};
-
-static void *run_sys(void *args) {
-  
-  vm_t *v = (vm_t*)args;
-  if(!v) {return nullptr;}
-
-  gpu_init(v); // contains SDL init so needs to be on render thread.
-  while(!atomic_load(&v->gpu->ready)) {}; // wait for gpu to become ready befor trying rendering..?
-
-  printf("starting render loop...\n");
-
-  while(atomic_load(&v->running)) {
-    gpu_swap(v->gpu);
-    SDL_Delay(1000/v->gpu->refresh_rate);
-  }
-
-  gpu_destroy(v->gpu);
-  return nullptr;
-}
-
-void vm_reset(void) {
-  memset(&vm, 0, sizeof(vm_t));
-  vm.run_system = run_sys;
-  atomic_init(&vm.running, false);
-  vm.program_loaded=false;
-  vm.io_space = io_space_get();
-  vm.reset=true;
-  vm.time_slice_length = TIMESLICE_LENGTH;
-}
-
-void vm_load(const prog_t *p) {
-  if(!p->code || p->codelen==0 || (p->entry_pc >= p->codelen)) {
-    fprintf(stderr, "invalid program\n");
-    return;
-  }
-  if(p->data && p->datalen) {
-    memcpy(vm.data, p->data, p->datalen);
-  }
-  memcpy(vm.code, p->code, p->codelen*sizeof(insn_t));
-  vm.regs[REG_PC]=p->entry_pc;
-  vm.program_loaded=true;
-  vm.reset=false; 
-}
-
-// PROGRAM EXECUTOR
-static size_t ve(size_t budget) {
-  #define DISPATCH() do {   \
-    budget--;               \
-    if(!budget) {           \
-        goto slice_end_ok;  \
-    }                       \
-    ins = code[pc];         \
-    goto *dispatch[OP(ins)]; \
-  } while(1)
-
-  static void *dispatch[OP_MAX_OPERATION] = {
-    [OP_UNDEFINED] = &&op_undefined,
-    [OP_EXIT] = &&op_exit,
-    [OP_YIELD] = &&op_yield,
-    [OP_MOV_RR] = &&op_mov_rr,
-    [OP_MOV_RI] = &&op_mov_ri,
-    [OP_MOV_RM] = &&op_mov_rm,
-    [OP_MOV_MR] = &&op_mov_mr,
-    [OP_ADD_RR] = &&op_add_rr,
-    [OP_ADD_RI] = &&op_add_ri,
-    [OP_SUB_RR] = &&op_sub_rr,
-    [OP_SUB_RI] = &&op_sub_ri,
-    [OP_MUL_RR] = &&op_mul_rr,
-    [OP_DIV_RR] = &&op_div_rr,
-    [OP_FADD_RR] = &&op_fadd_rr,
-    [OP_FSUB_RR] = &&op_fsub_rr,
-    [OP_FMUL_RR] = &&op_fmul_rr,
-    [OP_FDIV_RR] = &&op_fdiv_rr,  
-    [OP_CMP_RR] = &&op_cmp_rr,
-    [OP_CMP_RI] = &&op_cmp_ri,
-    [OP_FCMP_RR] = &&op_fcmp_rr,
-    [OP_JMP] = &&op_jmp,
-    [OP_JE] = &&op_je,
-    [OP_JNE] = &&op_jne,
-    [OP_JG] = &&op_jg,
-    [OP_JL] = &&op_jl,
-    [OP_JGE] = &&op_jge,
-    [OP_JLE] = &&op_jle,
-    [OP_SET_PIXEL] = &&op_set_pixel,
-    [OP_FB_CLEAR] = &&op_fb_clear,
-    [OP_FB_SWAP] = &&op_fb_swap
-  };
-
-  reg_t *regs = vm.regs;
-  fp_reg_t *fpregs = vm.fpregs;
-  insn_t *code = vm.code;
-  uint8_t *data = vm.data;
-  uint32_t pc = regs[REG_PC];
-  insn_t ins = 0;
-  cpu_flags_t flags = vm.flags;
-  uint32_t x=0,y=0,c=0;
-  double dx=0,dy=0;
-  pixel_t *fb = vm.gpu->fb;  
-  pixel_t *fb2 = vm.gpu->fb2;
-  size_t screenw = (size_t)vm.gpu->screen_width;
-  size_t screenh = (size_t)vm.gpu->screen_height;
-  size_t ret=0;
-    
-  DISPATCH(); // start execution at pc
-  
-  // exits
-  op_undefined:
-    flags&= ~FL_CMP_MASK;
-    flags|=3;
-    ret=-1; // signal normal exit to scheduler
-    goto ve_fin;   
-
-  op_exit:
-    flags&=~FL_CMP_MASK;
-    flags|=1;
-    ret=-1; // signal normal exit to scheduler
-    goto ve_fin;
-
-  op_yield:
-    ret=budget;
-    pc++;
-    goto ve_fin;
-
-  // mov
-  op_mov_rr:
-    regs[RR_DST(ins)] = regs[RR_SRC(ins)];
-    pc++;
-    DISPATCH();
-
-  op_mov_ri:
-    regs[RR_DST(ins)] = IMM20(ins);
-    pc++;
-    DISPATCH();
-
-  op_mov_mr:
-    regs[RR_DST(ins)] = data[IMM20(ins)];
-    pc++;
-    DISPATCH();
-
-  op_mov_rm:
-    data[IMM20(ins)] = (uint8_t)regs[RR_DST(ins)]; // dst is first one in struct
-    pc++;
-    DISPATCH();
-
-  // maths
-  op_add_rr:
-    regs[RR_DST(ins)]+=regs[RR_SRC(ins)];
-    pc++;
-    DISPATCH();
-
-  op_add_ri:
-    regs[RR_DST(ins)]+=IMM20(ins);
-    pc++;
-    DISPATCH();
-    
-  op_sub_rr:
-    regs[RR_DST(ins)]-=regs[RR_SRC(ins)];
-    pc++;
-    DISPATCH();
-
-  op_sub_ri:
-    regs[RR_DST(ins)]-=IMM20(ins);
-    pc++;
-    DISPATCH();
-    
-  op_mul_rr:
-    regs[RR_DST(ins)]*=regs[RR_SRC(ins)];
-    pc++;
-    DISPATCH();
-    
-  op_div_rr:
-    regs[RR_DST(ins)]/=regs[RR_SRC(ins)];
-    pc++;
-    DISPATCH();
-
-  op_fadd_rr:
-    fpregs[RR_DST(ins)]+=fpregs[RR_SRC(ins)];
-    pc++;
-    DISPATCH();
-  op_fsub_rr:
-    fpregs[RR_DST(ins)]-=fpregs[RR_SRC(ins)];
-    pc++;
-    DISPATCH();
-  op_fmul_rr:
-    fpregs[RR_DST(ins)]*=fpregs[RR_SRC(ins)];
-    pc++;
-    DISPATCH();
-  op_fdiv_rr:
-    fpregs[RR_DST(ins)]/=fpregs[RR_SRC(ins)];
-    pc++;
-    DISPATCH();
-
-  // comparison/branching
-  op_fcmp_rr:
-    flags&=~FL_CMP_MASK;
-    dy = fpregs[RR_DST(ins)];
-    dx = fpregs[RR_SRC(ins)];
-    goto op_fcmp;
-        
-  op_cmp_rr:
-    flags&=~FL_CMP_MASK;
-    y = regs[RR_DST(ins)];
-    x = regs[RR_SRC(ins)];    
-    goto op_cmp;
-
-  op_cmp_ri:
-    flags&=~FL_CMP_MASK;
-    y = regs[RR_DST(ins)];
-    x = IMM20(ins);
-    goto op_cmp;
-
-  op_fcmp:
-    if(dy==dx) {
-      flags|=FL_EQ;
-    }  else {
-      flags|=FL_NE;
-    }
-    if(y<x) {
-      flags|=FL_LT;
-    } else if(y>x) {
-      flags|=FL_GT;
-    }
-    pc++;
-    DISPATCH();
-    
-  op_cmp: 
-    if(y==x) {
-      flags|=FL_EQ;
-    } else {
-      flags|=FL_NE;
-    }
-    if(y<x) {
-      flags|=FL_LT;
-    } else if(y>x) {
-      flags|=FL_GT;
-    }
-    pc++;
-    DISPATCH();
-       
- op_jmp:
-    pc=IMM24(ins);
-    DISPATCH();
-    
-  op_je:
-    if(flags&FL_EQ) {
-      pc=IMM24(ins);
-    } else {
-      pc++;
-    }
-    DISPATCH();
-
-  op_jne:
-    if(flags&FL_NE) {
-      pc=IMM24(ins);
-    } else {
-      pc++;
-    }
-    DISPATCH();
-
-  op_jg:
-    if(flags&FL_GT && flags&FL_NE) {
-      pc=IMM24(ins);
-    } else {
-      pc++;
-    }
-    DISPATCH();
-    
-  op_jl:
-    if(flags&FL_LT && flags&FL_NE) {
-      pc=IMM24(ins);
-    } else {
-      pc++;
-    }
-    DISPATCH();
-
-  op_jge:
-    if(flags&FL_GT || flags&FL_EQ) {
-      pc=IMM24(ins);
-    } else {
-      pc++;
-    }
-    DISPATCH();
-
-  op_jle:
-    if(flags&FL_LT || flags&FL_EQ) {
-      pc=IMM24(ins);
-    } else {
-      pc++;
-    }
-    DISPATCH();
-
-  // graphics
-  op_set_pixel:
-    x = regs[REG_R5];
-    y = regs[REG_R6];
-    c = IMM24(ins);
-    if(y < screenh && x < screenw) {
-      fb[(y*screenw)+x].red = (c >> 16) & 0xff;
-      fb[(y*screenw)+x].green = (c >> 8) & 0xff;
-      fb[(y*screenw)+x].blue = (uint8_t)c;
-    }
-    pc++;
-    DISPATCH();
-    
-  op_fb_clear:
-    c = IMM24(ins);
-    for(uint32_t i=0;i<screenw*screenh; i++){
-      fb[i].red = (c>>16)&0xff;
-      fb[i].green = (c>>8)&0xff;
-      fb[i].blue = (uint8_t)c;
-    }
-    pc++;
-    DISPATCH();
-
-  op_fb_swap:
-    memcpy(fb2, fb, screenw*screenh*sizeof(pixel_t));
-    pc++;
-    DISPATCH();
-
-
-
-  slice_end_ok:
-    ret=budget;
-ve_fin:
-  vm.flags=flags;
-  regs[REG_PC]=pc;
-  return ret;
-}
-
-
+static machine_t machine;
+static vm_t frontend;
+static bool loaded;
+void vm_reset(void) { machine_reset(&machine); loaded=false; }
+void vm_load(const prog_t *p) { loaded=machine_load(&machine,p); }
 bool vm_run(void) {
-  bool status = false;
-
-#ifdef DO_PMC
-  bool have_pmc = vm_pmc_init();
-  if (have_pmc) {
-    vm_pmc_start();
-  }
-#endif
-
-  atomic_store(&vm.running, true);
-
-  pthread_attr_init(&vm.sys_tattr);
-  pthread_create(&vm.sys_thread, &vm.sys_tattr, vm.run_system, &vm);
-
-  while (!vm.gpu || !atomic_load(&vm.gpu->ready)) {
-    SDL_Delay(1);
-  }
-
-  printf("starting program...\n");
-
-  size_t slices_taken=0;  
-  double last = time_now_sec();
-  
-  while(1){
-    double now = time_now_sec();
-    double dt = now - last;
-    last=now;
-    vm.fpregs[FP_REG_DT]=dt;
-
-    size_t x = ve(vm.time_slice_length);
-  check_x:
-    if(!x) {
-      slices_taken++;
-    } else if(x == -1) {
-      slices_taken++; // dont really need. could uses exit_statusses
-      break;
-    } else {
-      // OP_YIELD
-      
-      x = ve(x);
-      goto check_x;
+  if(!loaded) return false;
+  if(!gpu_init(&frontend)) { gpu_destroy(frontend.gpu); return false; }
+  gpu_t *g=frontend.gpu;
+  machine.fb=g->fb; machine.fb2=g->fb2;
+  machine.width=g->screen_width; machine.height=g->screen_height;
+  cpu_result_t r={CPU_BUDGET,0};
+  bool quit=false;
+  uint64_t shown=0;
+  uint64_t start=SDL_GetTicksNS();
+  while(!quit) {
+    SDL_Event e;
+    while(SDL_PollEvent(&e)) {
+      if(e.type==SDL_EVENT_QUIT) quit=true;
+      if(e.type==SDL_EVENT_WINDOW_FOCUS_LOST) machine_release_keys(&machine);
+      if(e.type==SDL_EVENT_KEY_DOWN || e.type==SDL_EVENT_KEY_UP) {
+        unsigned key=INPUT_KEY_COUNT;
+        switch(e.key.scancode) {
+          case SDL_SCANCODE_UP: key=KEY_UP; break;
+          case SDL_SCANCODE_LEFT: key=KEY_LEFT; break;
+          case SDL_SCANCODE_DOWN: key=KEY_DOWN; break;
+          case SDL_SCANCODE_RIGHT: key=KEY_RIGHT; break;
+          case SDL_SCANCODE_Z: key=KEY_Z; break;
+          case SDL_SCANCODE_X: key=KEY_X; break;
+          case SDL_SCANCODE_M: key=KEY_M; break;
+          case SDL_SCANCODE_TAB: key=KEY_TAB; break;
+          case SDL_SCANCODE_T: key=KEY_T; break;
+          case SDL_SCANCODE_F: key=KEY_F; break;
+          default: break;
+        }
+        machine_key(&machine,key,e.type==SDL_EVENT_KEY_DOWN);
+      }
     }
-    
-  };
-  
-  printf("program execution took %zu time-slices\n", slices_taken);
-
-  atomic_store(&vm.running, false);
-
-  pthread_join(vm.sys_thread, NULL);
-  pthread_attr_destroy(&vm.sys_tattr);
-  
-
-#ifdef DO_PMC
-  if (have_pmc) {
-    vm_pmc_stop_read();
-    vm_pmc_print();
-    vm_pmc_shutdown();
-  }
-#endif
-
-  if (vm.flags & 2) {
-    fprintf(stderr, "ERR: vm.flags: %08x\n", vm.flags);
-  } else {
-    bitmap_t b = { vm.gpu->fb, vm.gpu->screen_width, vm.gpu->screen_height };
-    int r = gfx_save_png(&b, "test.png");
-    if (r == 0) {
-      status = true;
-    } else {
-      fprintf(stderr, "ERR: failed to save fb as png: %d\n", r);
+    if(quit) break;
+    uint64_t deadline=start+(machine.ticks/GUEST_HZ)*1000000000ull
+      +(machine.ticks%GUEST_HZ)*1000000000ull/GUEST_HZ;
+    uint64_t now=SDL_GetTicksNS();
+    if(now<deadline) { SDL_Delay(1); continue; }
+    if(machine.frames!=shown) {
+      memcpy(g->fb2,machine.published,sizeof(machine.published));
+      gpu_swap(g); shown=machine.frames;
     }
+    if(r.status==CPU_HALT || r.status==CPU_FAULT) break;
+    r=machine_step(&machine,10000);
   }
-
-  return status;
+  bool ok=quit || r.status==CPU_HALT;
+  if(ok) {
+    bitmap_t b={machine.video,g->screen_width,g->screen_height};
+    ok=gfx_save_png(&b,"test.png")==0;
+  } else if(r.status==CPU_FAULT) {
+    fprintf(stderr,"CPU fault %u at PC %u\n",machine.fault,machine.fault_pc);
+  }
+  machine.fb=machine.fb2=NULL;
+  gpu_destroy(g);
+  return ok;
 }

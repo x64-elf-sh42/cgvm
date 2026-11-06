@@ -1,16 +1,16 @@
 #!/usr/local/bin/bash
 
 # normal sources, pmc stuff added manually in debug command
-SOURCES="src/main.c src/gfx/gfx.c src/vm/vm.c src/programs/linedraw.c src/programs/manylines.c src/programs/boxdraw.c src/programs/emitters.c src/vm/gpu.c src/vm/io.c src/util.c"
+SOURCES="src/main.c src/gfx/gfx.c src/vm/vm.c src/vm/machine.c src/programs/linedraw.c src/programs/manylines.c src/programs/boxdraw.c src/programs/tetrahedron.c src/programs/flight.c src/programs/emitters.c src/vm/gpu.c src/vm/io.c src/util.c"
 
 
 
 # without pmc
-cc --std=c23 -Wall -Werror -Wno-gnu-label-as-value -pedantic    \
+cc --std=c23 -O2 -Wall -Werror -Wno-gnu-label-as-value -pedantic    \
   -I/usr/local/include \
   -L/usr/local/lib \
   $SOURCES \
-  -lpng \
+  -lpng -lm \
   -pthread \
   $(pkg-config --cflags --libs sdl3) \
   -g \

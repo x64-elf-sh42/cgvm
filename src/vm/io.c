@@ -2,8 +2,10 @@
 
 #include <stdlib.h>
 
-io_port_t io_in_ports[IO_PORT_MAX] = {0};
-io_port_t io_out_ports[IO_PORT_MAX] = {0};
+static io_port_t io_in_ports[IO_PORT_MAX] = {0};
+static io_port_t io_out_ports[IO_PORT_MAX] = {0};
+static io_space_t io_space = {&io_in_ports[0], &io_out_ports[0]};
+
 
 bool io_port_create(uint8_t port_index, uint8_t op_size, IO_DIRECTION direction, io_handler_t handler) {
   io_port_t *io_list = nullptr;
@@ -49,5 +51,5 @@ void io_port_destroy(uint8_t port_index, IO_DIRECTION direction) {
 }
 
 io_space_t io_space_get(void) {
-  return (io_space_t){&io_in_ports[0], &io_out_ports[0]};
+  return io_space;
 }

@@ -15,10 +15,8 @@ bool gpu_init(vm_t *vm) {
   gpu->fb = calloc(fbsz, sizeof(pixel_t));
   if(!gpu->fb) { return false; }
   gpu->fb2 = calloc(fbsz, sizeof(pixel_t));
-  if(!gpu->fb2) { free(gpu->fb); return false; }
+  if(!gpu->fb2) { return false; }
 
-  memset(gpu->fb, 0, fbsz);
-  memset(gpu->fb2, 0, fbsz);
 
   if(!SDL_Init(SDL_INIT_VIDEO)) {
       fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
@@ -30,10 +28,12 @@ bool gpu_init(vm_t *vm) {
   gpu->screen_height=FB_HEIGHT;
  
   gpu->window = SDL_CreateWindow("CGVM", gpu->screen_width, gpu->screen_height, 0);
+  if(!gpu->window) return false;
   gpu->renderer = SDL_CreateRenderer(gpu->window, NULL);
   gpu->refresh_rate=60;
   gpu->screen_width=FB_WIDTH;
   gpu->screen_height=FB_HEIGHT;
+  if(!gpu->renderer) return false;
   gpu->texture = SDL_CreateTexture(
     gpu->renderer,
     SDL_PIXELFORMAT_RGB24,
@@ -41,6 +41,7 @@ bool gpu_init(vm_t *vm) {
     gpu->screen_width,
     gpu->screen_height                                  
   );
+  if(!gpu->window || !gpu->renderer || !gpu->texture) return false;
   atomic_store(&gpu->ready, true);
   return true;
 }
@@ -57,4 +58,8 @@ void gpu_destroy(gpu_t *gpu) {
   SDL_DestroyRenderer(gpu->renderer);
   SDL_DestroyWindow(gpu->window);
   SDL_Quit();
+  free(gpu->fb); free(gpu->fb2);
+  gpu->fb=gpu->fb2=NULL;
+  gpu->texture=NULL; gpu->renderer=NULL; gpu->window=NULL;
+  atomic_store(&gpu->ready,false);
 }

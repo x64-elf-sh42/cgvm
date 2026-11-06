@@ -1,4 +1,7 @@
 #pragma once
+#include <stddef.h>
+#include <stdint.h>
+#include "insn.h"
 
 struct prog {
   uint8_t *data;

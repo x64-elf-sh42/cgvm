@@ -8,12 +8,8 @@
 #define FB_SIZE (FB_WIDTH*FB_HEIGHT)
     
 /* A coloured pixel. */
-struct pixel {
-    uint8_t red;
-    uint8_t green;
-    uint8_t blue;
-};
-typedef struct pixel pixel_t;
+#include "../vm/machine.h"
+typedef machine_pixel_t pixel_t;
 
 /* A picture. */
 struct bitmap {

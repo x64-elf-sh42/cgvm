@@ -1,6 +1,7 @@
 #pragma once
 #include "../gfx/gfx.h"
 #include "vm.h"
+#include <stdatomic.h>
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 struct vm;
