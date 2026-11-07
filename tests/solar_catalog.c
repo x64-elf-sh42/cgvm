@@ -39,12 +39,13 @@ int main(void) {
   /* Manual flight mode is latched, bounded, and resets throttle on switching. */
   machine_key(m,KEY_F,true);step(m);assert(u(m,8484)==1&&m->regs[11]==0);
   step(m);assert(u(m,8484)==1);machine_key(m,KEY_F,false);
-  m->regs[9]=128;m->regs[11]=300;double before=get(m,8616);step(m);assert(fabs(get(m,8616)-before+15000)<1e-6);
+  m->regs[9]=128;m->regs[11]=300;double before=get(m,8616);step(m);assert(fabs(get(m,8616)-before+50000)<1e-6);
   machine_key(m,KEY_Z,true);step(m);assert(m->regs[11]==300);machine_release_keys(m);
   /* A fast manual step into Earth's safety sphere must stop outside it. */
   put(m,8616,149.6e6-6478-5);m->regs[9]=0;m->regs[11]=300;step(m);
   assert(u(m,8476)==2&&m->regs[11]==0&&distance(m,3)>6478);
   machine_key(m,KEY_F,true);step(m);assert(u(m,8484)==2&&m->regs[11]==0);machine_release_keys(m);
+  machine_key(m,KEY_F,true);step(m);assert(u(m,8484)==3&&m->regs[11]==0);machine_release_keys(m);
   machine_key(m,KEY_F,true);step(m);assert(u(m,8484)==0);machine_release_keys(m);
   put(m,8616,149.6e6-6378*3);
   /* Outermost catalogue destination remains within navigation precision. */
@@ -60,16 +61,19 @@ int main(void) {
     while(u(m,8472)&&n++<400)step(m);
     assert(n<400&&u(m,8476)==1);assert(fabs(distance(m,body)-r)<.001);
   }
-  set(m,8464,24);machine_key(m,KEY_TAB,true);step(m);assert(u(m,8464)==0);machine_release_keys(m);
+  set(m,8488,8);set(m,8464,24);machine_key(m,KEY_TAB,true);step(m);assert(u(m,8464)==23);machine_release_keys(m);
   p=solar_flight();assert(machine_load(m,&p));rendered_frame(m);
   for(unsigned body=9;body<25;body++) {
+    unsigned group=body==9?7:body==10?1:body<=12?2:body<=16?3:body<=18?4:body<=20?5:body==21?6:body==22?7:8;
+    unsigned first=group==1?10:group==2?11:group==3?13:group==4?17:group==5?19:group==6?21:22;
+    unsigned row=body==9?0:body>=23?body-23:body-first+1;
     double r=get(m,20000+body*64+24);
     for(unsigned k=0;k<3;k++) put(m,8600+k*8,get(m,20000+body*64+k*8)-(k==2?3*r:0));
-    set(m,8464,body);m->regs[9]=m->regs[10]=m->regs[11]=0;
+    set(m,8488,group);set(m,8464,body);m->regs[9]=m->regs[10]=m->regs[11]=0;
     rendered_frame(m);assert(u(m,8872+body*4)==2);
     assert(u(m,9300+body*4)==1);
-    /* The selected row's text itself is green, on every catalogue page. */
-    unsigned green=0,blue=0,y=100+(body%10)*23;
+    /* The selected row's text itself is green within its named system. */
+    unsigned green=0,blue=0,y=100+row*23;
     for(unsigned py=y;py<y+15;py++)for(unsigned px=850;px<985;px++) {
       machine_pixel_t c=m->published[py*1024+px];
       green+=c.red==0x33&&c.green==0xff&&c.blue==0x44;

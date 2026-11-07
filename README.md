@@ -26,15 +26,38 @@ Close the window to exit and save the final frame to `test.png`.
 | --- | --- |
 | Arrow keys | Manual steering |
 | Z / X | Accelerate / brake; X also cancels cruise |
-| F | Cycle FLIGHT (0–9,000 km/s), SYSTEM (0–900,000 km/s), and LOCAL (0–10 m/s); reset throttle and cancel cruise |
-| Tab | Cycle Sol, the planets including Pluto, 13 moons, Ceres, and Vesta |
-| T | Cruise to the selected destination, or cancel |
+| F | Cycle FLIGHT, SYSTEM, LOCAL, and CRUISE; stop and cancel travel |
+| G | Switch destination group: planets, named planet systems, or asteroid belt |
+| Tab | Select a destination within the current group |
+| T | Engage or cancel travel in CRUISE mode; nearby destinations are blocked |
+| S / C | Scan for a nearby asteroid / clear the scan result |
+| L | Aim at the scanned rock; throttle and braking remain manual |
+| R | In SYSTEM mode, cruise to the scanned rock and stop automatically; press again to cancel |
 | M | Show or hide the system map |
 
-The game starts in FLIGHT mode. Cruise is fictional high-speed travel that stops
-outside the destination and checks the route for collisions. The map compresses
-orbital spacing; the flight view uses physical body scale. Procedural asteroids
-are sparse and appear only at close range.
+The game starts in FLIGHT mode (0–9,000 km/s); SYSTEM reaches 3,000,000 km/s and
+LOCAL reaches 100 m/s. Select CRUISE with F before pressing T. Cruise is fictional
+high-speed travel that stops outside the destination and checks the route for
+collisions. The map compresses orbital spacing; the flight view uses physical
+body scale. Moon labels appear near their parent planet. The navigation panel
+shows your heading and a course along the asteroid belt. Press S to scan within
+50 million km; a detected rock stays locked with live bearing and range until
+you clear it, rescan, or move out of range. The scan panel appears only after
+a scan. Procedural asteroids are sparse and their geometry appears only at
+close range.
+
+Scanning is a pulse: leaving the panel open does not search new areas. Press S
+again while exploring. The cockpit shows a throttle bar and percentage; SYSTEM
+speed uses two decimal places in millions of km/s so partial throttle is visible.
+
+For an asteroid approach, scan with S, select SYSTEM with F, then press R. Fly-to
+keeps the rock centered, travels at SYSTEM speed, and stops automatically
+50 metres outside its bounding radius in LOCAL mode. A fresh steering or brake
+press cancels cruise; already-held controls cannot cancel it or restart flight
+after arrival. Asteroid
+proximity and collision-course warnings help with manual approaches, and the
+manual collision stop allows about 11 metres of bounding-radius clearance.
+World labels respect scene depth, so distant tags cannot cover a nearer asteroid.
 
 See the [Solar System flight reference](docs/solar-system.md) for travel rules,
 rendering, source data, and limitations.

@@ -50,7 +50,7 @@ int main(void) {
     double c[]={i%2?130:-131,(int)(i%40)-20,(int)((i/40)%30)-15};
     for(unsigned k=0;k<3;k++)put(m,CELL+k*8,c[k]);step(m);
     double r=get(m,PROXY+24);if(!r)continue;occupied++;radius_sum+=r;
-    assert(r>=.5&&r<=8&&get(m,PROXY+32)==r+1);
+    assert(r>=.5&&r<=8&&get(m,PROXY+32)==r+.01);
     for(unsigned k=0;k<3;k++) {
       double offset=get(m,PROXY+k*8)-c[k]*3e6;
       assert(offset>=20&&offset<=3e6-20);
@@ -91,8 +91,8 @@ int main(void) {
   for(unsigned k=0;k<3;k++)xyz[k]=get(m,CACHE+slot*64+k*8);
   pose(m,xyz[0],xyz[1],xyz[2]-r-6);step(m);assert(contains(m,saved));
   set(m,8484,1);m->regs[9]=m->regs[10]=0;m->regs[11]=300;step(m);
-  assert(u(m,8476)==2&&m->regs[11]==0);
-  assert(fabs(get(m,8616)-(xyz[2]-r-2))<1e-6);
+  assert(u(m,8476)==10&&m->regs[11]==0);
+  assert(fabs(get(m,8616)-(xyz[2]-r-.011))<1e-6);
   /* A cruise segment crosses many unloaded regions; axis-aligned and diagonal. */
   const double directions[][3]={{0,0,1},{0,0,-1},{1,0,0},{0,1,0},{.6,0,.8}};
   for(unsigned d=0;d<5;d++) {
@@ -103,9 +103,9 @@ int main(void) {
     }
     step(m);assert(!contains(m,saved));
     put(m,10400,100);set(m,8464,4);set(m,8472,1);step(m);
-    assert(u(m,8476)==2&&u(m,8472)==0&&u(m,10808)>54);
+    assert(u(m,8476)==10&&u(m,8472)==0&&u(m,10808)>54);
     double distance=0;for(unsigned k=0;k<3;k++){double v=get(m,8600+k*8)-xyz[k];distance+=v*v;}
-    assert(fabs(sqrt(distance)-r-2)<1e-5);
+    assert(fabs(sqrt(distance)-r-.011)<1e-5);
   }
   /* Anonymous geometry up close; no markers/labels or extra destinations. */
   p=solar_flight();printf("Streamed solar program: %zu words, %zu data bytes\n",p.codelen,p.datalen);
@@ -120,16 +120,16 @@ int main(void) {
   double edge=floor(xyz[0]/3e6)*3e6;
   pose(m,edge-.1,xyz[1],xyz[2]);step(m);assert(contains(m,saved));
   pose(m,edge+.1,xyz[1],xyz[2]);step(m);assert(contains(m,saved));
-  set(m,8464,0);
-  for(unsigned b=0;b<50;b++) {machine_key(m,KEY_TAB,true);step(m);assert(u(m,8464)==(b+1)%25);machine_key(m,KEY_TAB,false);step(m);}
+  set(m,8488,0);set(m,8464,0);
+  for(unsigned b=0;b<20;b++) {machine_key(m,KEY_TAB,true);step(m);assert(u(m,8464)==(b+1)%10);machine_key(m,KEY_TAB,false);step(m);}
   /* Earlier named-body lookahead and selected-target range remain intact. */
   p=solar_flight();assert(machine_load(m,&p));rendered_frame(m);
-  for(unsigned k=0;k<3;k++)put(m,8600+k*8,get(m,20000+11*64+k*8)-(k==2?1e8:0));
-  set(m,8464,4);rendered_frame(m);assert(u(m,9300+11*4)==1);
-  put(m,8600,get(m,20000+11*64)-.8e8);rendered_frame(m);assert(u(m,9300+11*4)==0);
-  put(m,8600,get(m,20000+11*64));put(m,8616,get(m,20000+11*64+16)-2e9);
-  rendered_frame(m);assert(u(m,9300+11*4)==0);
-  set(m,8464,11);rendered_frame(m);assert(u(m,9300+11*4)==1);
+  for(unsigned k=0;k<3;k++)put(m,8600+k*8,get(m,20000+4*64+k*8)-(k==2?1e8:0));
+  set(m,8464,3);rendered_frame(m);assert(u(m,9300+4*4)==1);
+  put(m,8600,get(m,20000+4*64)-.8e8);rendered_frame(m);assert(u(m,9300+4*4)==0);
+  put(m,8600,get(m,20000+4*64));put(m,8616,get(m,20000+4*64+16)-2e9);
+  rendered_frame(m);assert(u(m,9300+4*4)==0);
+  set(m,8464,4);rendered_frame(m);assert(u(m,9300+4*4)==1);
   /* Rendered cruise still uses guest time correctly across clock wrap. */
   p=solar_flight();assert(machine_load(m,&p));rendered_frame(m);
   pose(m,0,1e10,0);

@@ -34,6 +34,11 @@ bool vm_run(void) {
           case SDL_SCANCODE_TAB: key=KEY_TAB; break;
           case SDL_SCANCODE_T: key=KEY_T; break;
           case SDL_SCANCODE_F: key=KEY_F; break;
+          case SDL_SCANCODE_G: key=KEY_G; break;
+          case SDL_SCANCODE_S: key=KEY_S; break;
+          case SDL_SCANCODE_C: key=KEY_C; break;
+          case SDL_SCANCODE_L: key=KEY_L; break;
+          case SDL_SCANCODE_R: key=KEY_R; break;
           default: break;
         }
         machine_key(&machine,key,e.type==SDL_EVENT_KEY_DOWN);

@@ -465,7 +465,7 @@ static void gpu_line(machine_t *m, machine_pixel_t color) {
     if((unsigned)x0<VIDEO_WIDTH && (unsigned)y0<VIDEO_HEIGHT) {
       size_t i=y0*VIDEO_WIDTH+x0;
       if(!m->depth_enabled || q>m->depth[i]) {
-        m->video[i]=color; if(m->depth_enabled) m->depth[i]=q;
+        m->video[i]=color; if(m->depth_enabled==GPU_DEPTH_WRITE) m->depth[i]=q;
       }
     }
     step++;
@@ -495,7 +495,7 @@ static void gpu_triangle(machine_t *m,machine_pixel_t color) {
     if(a<0 || b<0 || c<0) continue;
     double q=a*m->q1+b*m->q2+c*m->q3; size_t i=py*VIDEO_WIDTH+px;
     if(!m->depth_enabled || q>m->depth[i]) {
-      m->video[i]=color; if(m->depth_enabled) m->depth[i]=q;
+      m->video[i]=color; if(m->depth_enabled==GPU_DEPTH_WRITE) m->depth[i]=q;
     }
   }
 }
@@ -527,7 +527,7 @@ bool bus_write(machine_t *m, uint32_t a, unsigned w, uint32_t v) {
     case GPU_Q1: m->q1=v; return true;
     case GPU_Q2: m->q2=v; return true;
     case GPU_Q3: m->q3=v; return true;
-    case GPU_DEPTH: if(v>1) return false; m->depth_enabled=v; return true;
+    case GPU_DEPTH: if(v>GPU_DEPTH_TEST_ONLY) return false; m->depth_enabled=v; return true;
     case GPU_X2: m->pixel_x2=v; return true;
     case GPU_Y2: m->pixel_y2=v; return true;
     case GPU_X: m->pixel_x=v; return true;

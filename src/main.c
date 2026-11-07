@@ -13,7 +13,7 @@ int main(int argc, [[maybe_unused]]char *argv[argc+1]) {
   // Guest-rendered wireframe vehicle with a fixed external camera.
   prog_t bdraw = solar_flight();
   
-  printf("ASTRA: Arrow keys steer, Z/X throttle, F flight range, Tab destination, T travel, M map.\n");
+  printf("ASTRA: Arrows steer, Z/X throttle, F flight mode, G group, Tab select, T cruise, S scan, C clear, L hold rock bearing, R fly-to rock in SYSTEM, M map.\n");
 
   vm_reset();
   // load program into vm

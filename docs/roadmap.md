@@ -18,7 +18,11 @@ behavior.
   focus-loss release in the SDL frontend.
 - [Astra](solar-system.md) provides physical-scale Solar System flight, binary64
   world coordinates, manual flight ranges, destination cruise, a system map,
-  body labels, deterministic regional asteroids, and swept collision checks.
+  contextual moon labels, grouped destinations, a heading/belt-course display,
+  an on-demand rock scanner with a finite range and persistent contact lock,
+  bearing hold, assisted rock approaches, and proximity warnings,
+  deterministic regional asteroids, and swept collision checks.
+  Cruise requires its own flight mode and rejects destinations already nearby.
 - Headless regression tests cover CPU behavior, devices, rendering, input,
   navigation, procedural generation, and interplanetary travel. Run
   `sh tests/run.sh` from the repository root.

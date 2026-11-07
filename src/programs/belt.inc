@@ -16,6 +16,10 @@
 #define B_CONST 18400u
 #define B_CACHE 24000u
 #define B_SLOTS 27u
+#define B_SCAN_CHECKS 12532u
+#define B_SCAN_VISITS 12536u
+#define B_SCAN_MIN 12600u
+#define B_SCAN_MAX 12624u
 static void b_imm(unsigned r,uint32_t value) {
   e(ENC_RI(OP_LUI,r,value>>12));e(ADD_RI(r,value&4095));
 }
@@ -55,7 +59,7 @@ static void b_generate(void) {
   sl(4,B_PROXY+8);f(OP_FMUL_RR,4,4);sl(5,B_CONST+56);f(OP_FCMP_RR,4,5);size_t high=pc++;
   b_random();f(OP_FMUL_RR,4,4);f(OP_FMUL_RR,4,4);f(OP_FMUL_RR,4,4);
   sl(5,B_CONST+64);f(OP_FMUL_RR,4,5);loadf(5,8512);f(OP_FADD_RR,4,5);ss(4,B_PROXY+24);
-  sl(5,S_CONST+8);f(OP_FADD_RR,4,5);ss(4,B_PROXY+32);
+  sl(5,S_CONST+144);f(OP_FADD_RR,4,5);ss(4,B_PROXY+32);
   for(unsigned k=0;k<3;k++) {b_random();sl(5,B_CONST+72);f(OP_FMUL_RR,4,5);sl(5,B_CONST+80);f(OP_FADD_RR,4,5);ss(4,B_PROXY+40+k*8);}
   /* Exclude overlaps with the permanent catalogue, including safety shells. */
   size_t overlaps[S_CATALOG];
@@ -104,6 +108,10 @@ static void b_slots_end(size_t loop) {
   b_inc(B_INDEX);e(CMP_RI(2,B_SLOTS));e(JL(loop));
 }
 static void b_render(void) {
+  /* Kilometre-scale near clipping hides close rocks. Keep the shorter plane
+   * local to small geometry; planets retain bounded projection coordinates. */
+  sl(4,S_ROCK_CLEAR);sl(5,S_CONST+136);f(OP_FCMP_RR,4,5);size_t distant_plane=pc++;
+  sl(4,S_CONST+104);storef(4,NEAR);code[distant_plane]=JG(pc);
   si(B_VISIBLE,0);size_t loop=b_slots_begin();
   sl(4,B_PROXY+24);loadf(5,ZERO);f(OP_FCMP_RR,4,5);size_t empty=pc++;
   size_t rejected[5];s_frustum(S_CATALOG,rejected);
@@ -117,12 +125,114 @@ static void b_render(void) {
   b_inc(B_VISIBLE);for(unsigned face=0;face<20;face++)s_face(S_CATALOG,face,true);
   code[empty]=ENC_I24(OP_JLE,pc);code[small]=JG(pc);for(unsigned k=0;k<5;k++)code[rejected[k]]=JL(pc);
   b_slots_end(loop);
+  loadf(4,16400);storef(4,NEAR);
 }
 static void b_nearest(void) {
+  si(S_PROXIMITY,0);si(S_ROCK_NEAR,0);sl(4,S_CONST+56);ss(4,S_ROCK_CLEAR);
   size_t loop=b_slots_begin();sl(4,B_PROXY+24);loadf(5,ZERO);f(OP_FCMP_RR,4,5);size_t empty=pc++;
-  s_delta(S_CATALOG);sroot();sl(5,B_PROXY+32);f(OP_FSUB_RR,4,5);sl(5,S_CLEAR);f(OP_FCMP_RR,4,5);size_t farther=pc++;
+  s_delta(S_CATALOG);sroot();sl(5,B_PROXY+24);f(OP_FSUB_RR,4,5);
+  sl(5,S_ROCK_CLEAR);f(OP_FCMP_RR,4,5);size_t farther_rock=pc++;
+  ss(4,S_ROCK_CLEAR);si(S_ROCK_NEAR,1);code[farther_rock]=ENC_I24(OP_JGE,pc);
+  sl(5,S_CONST+144);f(OP_FSUB_RR,4,5);sl(5,S_CLEAR);f(OP_FCMP_RR,4,5);size_t farther=pc++;
   ss(4,S_CLEAR);si(S_NEAREST,S_CATALOG);
-  code[empty]=ENC_I24(OP_JLE,pc);code[farther]=ENC_I24(OP_JGE,pc);b_slots_end(loop);
+  code[farther]=ENC_I24(OP_JGE,pc);
+  /* The cruise controller will stop at its own target. Do not issue a manual
+   * braking prompt for that expected arrival; other obstacles still warn. */
+  sr(2,S_GUIDE);e(CMP_RI(2,2));size_t manual_target=pc++;size_t different[3];
+  for(unsigned k=0;k<3;k++){sl(5,B_PROXY+k*8);sl(6,S_SCAN_POS+k*8);f(OP_FCMP_RR,5,6);different[k]=pc++;}
+  size_t own_target=pc++;
+  code[manual_target]=JNE(pc);for(unsigned k=0;k<3;k++)code[different[k]]=JNE(pc);
+  /* Warn five seconds before a ray would enter a rock's safety sphere. */
+  loadf(9,ZERO);
+  for(unsigned k=0;k<3;k++){sl(5,8800+k*8);sl(6,S_WARN_DIR+k*8);f(OP_FMUL_RR,5,6);f(OP_FADD_RR,9,5);}
+  loadf(5,ZERO);f(OP_FCMP_RR,9,5);size_t behind=pc++;ss(9,8832);loadf(10,ZERO);
+  for(unsigned k=0;k<3;k++) {
+    sl(5,S_WARN_DIR+k*8);f(OP_FMUL_RR,5,9);sl(6,8800+k*8);f(OP_FSUB_RR,6,5);f(OP_FMUL_RR,6,6);f(OP_FADD_RR,10,6);
+  }
+  sl(4,B_PROXY+32);f(OP_FMUL_RR,4,4);f(OP_FSUB_RR,4,10);loadf(5,ZERO);f(OP_FCMP_RR,4,5);size_t miss=pc++;
+  sroot();sl(9,8832);f(OP_FSUB_RR,9,4);sl(5,S_WARN_REACH);f(OP_FCMP_RR,9,5);size_t distant=pc++;si(S_PROXIMITY,3);
+  code[own_target]=JMP(pc);code[behind]=ENC_I24(OP_JLE,pc);code[miss]=JL(pc);code[distant]=JG(pc);code[empty]=ENC_I24(OP_JLE,pc);b_slots_end(loop);
+  sr(2,S_PROXIMITY);e(CMP_RI(2,3));size_t imminent=pc++;
+  sl(4,S_ROCK_CLEAR);sl(5,S_CONST+136);f(OP_FCMP_RR,4,5);size_t not_near=pc++;si(S_PROXIMITY,1);
+  sl(5,S_CONST+120);f(OP_FCMP_RR,4,5);size_t not_close=pc++;si(S_PROXIMITY,2);
+  code[not_near]=JG(pc);code[not_close]=JG(pc);code[imminent]=ENC_I24(OP_JE,pc);
+}
+static void b_scan_candidate(void) {
+  sl(4,B_PROXY+24);loadf(5,ZERO);f(OP_FCMP_RR,4,5);size_t empty=pc++;
+  s_delta(S_CATALOG);sroot();sl(5,S_SCAN_DIST);f(OP_FCMP_RR,4,5);size_t farther=pc++;
+  ss(4,S_SCAN_DIST);si(S_SCAN_FOUND,1);si(S_SCAN_STATE,1);sl(5,B_PROXY+24);ss(5,S_SCAN_RADIUS);
+  for(unsigned k=0;k<3;k++){sl(5,B_PROXY+k*8);ss(5,S_SCAN_POS+k*8);}
+  code[empty]=ENC_I24(OP_JLE,pc);code[farther]=JG(pc);
+}
+/* Distance of an interval [F4,F6] from zero, squared, in F4. */
+static void b_interval_squared(void) {
+  loadf(7,ZERO);f(OP_FCMP_RR,4,7);size_t positive=pc++;
+  f(OP_FCMP_RR,6,7);size_t negative=pc++;copy(4,7);size_t inside=pc++;
+  code[negative]=JL(pc);copy(4,6);code[positive]=JG(pc);code[inside]=JMP(pc);f(OP_FMUL_RR,4,4);
+}
+/* Conservative region bounds; all results use squared distances. */
+static void b_scan_bounds(size_t rejected[4]) {
+  loadf(10,ZERO);
+  for(unsigned k=0;k<3;k++) {
+    sl(4,B_CELL+k*8);sl(5,B_CONST);f(OP_FMUL_RR,4,5);ss(4,B_SCAN_MIN+k*8);
+    copy(6,4);f(OP_FADD_RR,6,5);ss(6,B_SCAN_MAX+k*8);
+    sl(5,S_POS+k*8);f(OP_FSUB_RR,4,5);f(OP_FSUB_RR,6,5);b_interval_squared();f(OP_FADD_RR,10,4);
+  }
+  sl(5,S_SCAN_DIST);f(OP_FMUL_RR,5,5);f(OP_FCMP_RR,10,5);rejected[0]=pc++;
+  /* Reject cells wholly outside the belt annulus or vertical slab. */
+  loadf(10,ZERO);loadf(11,ZERO);
+  for(unsigned k=0;k<3;k+=2) {
+    sl(4,B_SCAN_MIN+k*8);sl(6,B_SCAN_MAX+k*8);
+    copy(8,4);f(OP_FMUL_RR,8,8);copy(9,6);f(OP_FMUL_RR,9,9);
+    f(OP_FCMP_RR,8,9);size_t larger=pc++;copy(8,9);code[larger]=ENC_I24(OP_JGE,pc);
+    f(OP_FADD_RR,11,8);b_interval_squared();f(OP_FADD_RR,10,4);
+  }
+  sl(5,B_CONST+48);f(OP_FCMP_RR,10,5);rejected[1]=pc++;
+  sl(5,B_CONST+40);f(OP_FCMP_RR,11,5);rejected[2]=pc++;
+  sl(4,B_SCAN_MIN+8);sl(6,B_SCAN_MAX+8);b_interval_squared();sl(5,B_CONST+56);f(OP_FCMP_RR,4,5);rejected[3]=pc++;
+}
+/* Search unloaded regions without enlarging the rendering cache. A cached
+ * contact seeds the distance bound; near contacts need no wider search at all. */
+static void b_scan_regions(void) {
+  sl(4,S_SCAN_DIST);sl(5,B_CONST);f(OP_FCMP_RR,4,5);size_t local=pc++;
+  sl(4,S_POS+8);f(OP_FMUL_RR,4,4);sl(5,B_CONST+96);sl(6,S_SCAN_DIST);f(OP_FADD_RR,5,6);f(OP_FMUL_RR,5,5);
+  f(OP_FCMP_RR,4,5);size_t high=pc++;
+  sl(4,S_POS);f(OP_FMUL_RR,4,4);sl(5,S_POS+16);f(OP_FMUL_RR,5,5);f(OP_FADD_RR,4,5);sroot();
+  sl(5,B_CONST+104);sl(6,S_SCAN_DIST);f(OP_FSUB_RR,5,6);f(OP_FCMP_RR,4,5);size_t inner=pc++;
+  sl(5,B_CONST+112);f(OP_FADD_RR,5,6);f(OP_FCMP_RR,4,5);size_t outer=pc++;
+  /* ceil(best distance / cell width) bounds all potentially closer cells. */
+  sl(4,S_SCAN_DIST);sl(5,B_CONST);f(OP_FDIV_RR,4,5);f(OP_FTOI,12,4);f(OP_ITOF,5,12);
+  f(OP_FCMP_RR,4,5);size_t exact=pc++;e(ADD_RI(12,1));code[exact]=ENC_I24(OP_JLE,pc);
+  f(OP_MOV_RR,13,12);e(MOV_RI(2,2));f(OP_MUL_RR,13,2);e(ADD_RI(13,1));
+  /* Generation preserves integer R6-R8 (iterator) and R12-R13 (extent/count). */
+  e(MOV_RI(8,0));size_t z=pc;e(MOV_RI(7,0));size_t y=pc;e(MOV_RI(6,0));size_t x=pc;
+  for(unsigned k=0;k<3;k++) {
+    f(OP_MOV_RR,2,6+k);f(OP_SUB_RR,2,12);f(OP_ITOF,4,2);sl(5,B_ORIGIN+k*8);f(OP_FADD_RR,4,5);ss(4,B_CELL+k*8);
+  }
+  b_inc(B_SCAN_VISITS);size_t rejected[4];b_scan_bounds(rejected);
+  b_inc(B_SCAN_CHECKS);b_generate();b_scan_candidate();
+  code[rejected[0]]=JG(pc);code[rejected[1]]=JG(pc);code[rejected[2]]=JL(pc);code[rejected[3]]=JG(pc);
+  e(ADD_RI(6,1));e(CMP_RR(6,13));e(JL(x));e(ADD_RI(7,1));e(CMP_RR(7,13));e(JL(y));e(ADD_RI(8,1));e(CMP_RR(8,13));e(JL(z));
+  code[local]=ENC_I24(OP_JLE,pc);code[high]=JG(pc);code[inner]=JL(pc);code[outer]=JG(pc);
+}
+/* A pulse chooses the nearest rock within 50 million km. The lock retains
+ * world coordinates, independently of cache lifetime. */
+static void b_scan(void) {
+  sr(2,S_SCAN_REQUEST);e(CMP_RI(2,0));size_t no_request=pc++;
+  si(S_SCAN_REQUEST,0);si(S_SCAN_FOUND,0);si(S_SCAN_STATE,2);
+  sl(4,S_CONST+96);ss(4,S_SCAN_DIST);si(B_SCAN_CHECKS,0);si(B_SCAN_VISITS,0);
+  size_t loop=b_slots_begin();b_scan_candidate();b_slots_end(loop);b_scan_regions();
+  code[no_request]=ENC_I24(OP_JE,pc);
+  sr(2,S_SCAN_FOUND);e(CMP_RI(2,0));size_t unlocked=pc++;
+  loadf(4,ZERO);
+  for(unsigned k=0;k<3;k++) {
+    sl(5,S_SCAN_POS+k*8);sl(6,S_POS+k*8);f(OP_FSUB_RR,5,6);ss(5,S_SCAN_DIR+k*8);
+    f(OP_FMUL_RR,5,5);f(OP_FADD_RR,4,5);
+  }
+  sroot();ss(4,S_SCAN_DIST);sl(5,S_CONST+96);f(OP_FCMP_RR,4,5);size_t in_range=pc++;
+  si(S_SCAN_FOUND,0);si(S_SCAN_STATE,3);
+  sr(2,S_GUIDE);e(CMP_RI(2,0));size_t manual=pc++;s_cancel_guide();si(S_EVENT,8);code[manual]=ENC_I24(OP_JE,pc);
+  code[in_range]=ENC_I24(OP_JLE,pc);code[unlocked]=ENC_I24(OP_JE,pc);
 }
 static void b_hit(void) {
   sl(4,B_PROXY+24);loadf(5,ZERO);f(OP_FCMP_RR,4,5);size_t empty=pc++;
@@ -132,10 +242,10 @@ static void b_hit(void) {
   ss(9,8832);loadf(10,ZERO);
   for(unsigned k=0;k<3;k++){sl(5,S_DIR+k*8);f(OP_FMUL_RR,5,9);sl(6,8800+k*8);f(OP_FSUB_RR,6,5);f(OP_FMUL_RR,6,6);f(OP_FADD_RR,10,6);}
   sl(4,B_PROXY+32);f(OP_FMUL_RR,4,4);f(OP_FSUB_RR,4,10);loadf(5,ZERO);f(OP_FCMP_RR,4,5);size_t miss=pc++;
-  sroot();sl(9,8832);f(OP_FSUB_RR,9,4);sl(5,S_CONST+8);f(OP_FSUB_RR,9,5);
+  sroot();sl(9,8832);f(OP_FSUB_RR,9,4);sl(5,S_CONST+104);f(OP_FSUB_RR,9,5);
   loadf(5,ZERO);f(OP_FCMP_RR,9,5);size_t positive=pc++;copy(9,5);code[positive]=ENC_I24(OP_JGE,pc);
   sl(5,S_STEP);f(OP_FCMP_RR,9,5);size_t farther=pc++;
-  ss(9,S_STEP);si(S_MODE,0);si(S_EVENT,2);e(MOV_RI(11,0));
+  ss(9,S_STEP);si(S_MODE,0);s_cancel_guide();si(S_EVENT,10);e(MOV_RI(11,0));
   code[empty]=ENC_I24(OP_JLE,pc);code[behind]=ENC_I24(OP_JLE,pc);code[miss]=JL(pc);code[farther]=ENC_I24(OP_JGE,pc);
 }
 static void b_sweep(void) {
@@ -157,6 +267,6 @@ static void b_sweep(void) {
 static void b_init_data(void) {
   const double values[]={3e6,16777216,.75,3e6-40,20,
     (2.2*149.6e6)*(2.2*149.6e6),(3.2*149.6e6)*(3.2*149.6e6),
-    (.5*149.6e6)*(.5*149.6e6),7.5,.3,.7,1.5e6};
+    (.5*149.6e6)*(.5*149.6e6),7.5,.3,.7,1.5e6,.5*149.6e6,2.2*149.6e6,3.2*149.6e6};
   for(unsigned k=0;k<sizeof(values)/sizeof(values[0]);k++)s_data64(B_CONST+k*8,values[k]);
 }

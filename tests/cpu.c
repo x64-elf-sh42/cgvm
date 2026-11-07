@@ -119,6 +119,23 @@ int main(void) {
   machine_reset(m);machine_key(m,KEY_T,true);
   assert(bus_read(m,INPUT_BASE+0x100+INPUT_PRESSED,4,&value)&&value==1);
   assert(bus_write(m,INPUT_BASE+0x100+INPUT_ACK,4,1)&&!m->pressed[KEY_T]);
+  machine_key(m,KEY_G,true);
+  assert(bus_read(m,INPUT_BASE+0x100+INPUT_HELD+8,4,&value)&&value==1);
+  assert(bus_read(m,INPUT_BASE+0x100+INPUT_PRESSED+8,4,&value)&&value==1);
+  assert(bus_write(m,INPUT_BASE+0x100+INPUT_ACK+8,4,1)&&!m->pressed[KEY_G]);
+  machine_release_keys(m);
+  assert(bus_read(m,INPUT_BASE+0x100+INPUT_RELEASED+8,4,&value)&&value==1);
+  assert(bus_write(m,INPUT_BASE+0x100+INPUT_ACK+8,4,2)&&!m->released[KEY_G]);
+  for(unsigned key=KEY_S;key<=KEY_R;key++) {
+    unsigned offset=(key-8)*4;machine_key(m,key,true);
+    assert(bus_read(m,INPUT_BASE+0x100+INPUT_HELD+offset,4,&value)&&value==1);
+    assert(bus_read(m,INPUT_BASE+0x100+INPUT_PRESSED+offset,4,&value)&&value==1);
+    assert(bus_write(m,INPUT_BASE+0x100+INPUT_ACK+offset,4,1)&&!m->pressed[key]);
+    machine_release_keys(m);
+    assert(bus_read(m,INPUT_BASE+0x100+INPUT_RELEASED+offset,4,&value)&&value==1);
+    assert(bus_write(m,INPUT_BASE+0x100+INPUT_ACK+offset,4,2)&&!m->released[key]);
+  }
+  assert(!bus_read(m,INPUT_BASE+0x100+28,4,&value));
   machine_reset(m);
   assert(bus_read(m,CLOCK_BASE,4,&value)&&value==0);
   machine_advance(m,UINT32_MAX);

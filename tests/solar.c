@@ -31,11 +31,12 @@ int main(void) {
   machine_t *m=malloc(sizeof(*m));assert(m);prog_t p=solar_physics_probe();assert(machine_load(m,&p));step(m);
   assert(get(m,20000+3*64+16)==149.6e6);assert(get(m,20000+3*64+24)==6378);
   set(m,8484,2);
-  double before=get(m,8616);m->regs[11]=300;step(m);assert(fabs(get(m,8616)-before-1.0/6000)<1e-7);
+  double before=get(m,8616);m->regs[11]=300;step(m);assert(fabs(get(m,8616)-before-1.0/600)<1e-7);
   /* Destination travel and arrival. */
-  set(m,8464,4);machine_key(m,KEY_T,true);step(m);machine_key(m,KEY_T,false);
+  set(m,8484,3);set(m,8464,4);machine_key(m,KEY_T,true);step(m);machine_key(m,KEY_T,false);
   unsigned steps=0;while(u(m,8472)&&steps++<1000) step(m);
   assert(steps<1000&&u(m,8476)==1&&m->regs[11]==0);
+  assert(u(m,8488)==2); /* Arrival at Mars opens its planet-and-moons group. */
   assert(fabs(distance(m,4)-get(m,20000+4*64+40))<.1);
   /* Long-haul travel is bounded and arrives at the outer system. */
   p=solar_physics_probe();assert(machine_load(m,&p));step(m);
@@ -44,7 +45,7 @@ int main(void) {
   assert(steps<5000&&u(m,8476)==1);
   assert(fabs(distance(m,8)-get(m,20000+8*64+40))<1);
   /* Travel toggles once per press and can be cancelled. */
-  set(m,8464,4);machine_key(m,KEY_T,true);step(m);assert(u(m,8472)==1);
+  set(m,8484,3);set(m,8464,4);machine_key(m,KEY_T,true);step(m);assert(u(m,8472)==1);
   step(m);assert(u(m,8472)==1);machine_key(m,KEY_T,false);machine_key(m,KEY_T,true);step(m);assert(u(m,8472)==0);
   machine_release_keys(m);
   /* A full cruise step crossing Earth must still stop outside it. */
@@ -55,7 +56,7 @@ int main(void) {
   assert(get(m,8616)<149.6e6-6478&&distance(m,3)>6478);
   /* Precision remains adequate at Neptune-sized coordinates. */
   set(m,8472,0);set(m,8484,2);put(m,8600,4.5e9);put(m,8608,1e8);put(m,8616,0);m->regs[9]=64;m->regs[10]=0;m->regs[11]=300;
-  double x=get(m,8600);step(m);assert(get(m,8600)>x&&get(m,8600)-x<.00018);
+  double x=get(m,8600);step(m);assert(get(m,8600)>x&&get(m,8600)-x<.0018);
   /* Render initial full-scale scene without a window. */
   p=solar_flight();assert(machine_load(m,&p));
   rendered_frame(m);

@@ -1,6 +1,6 @@
 # CGVM Bus and Graphics Reference
 
-Revision: 0.5. Status: implemented.
+Revision: 0.6. Status: implemented.
 
 ## 1. Address space
 
@@ -16,6 +16,7 @@ before any transfer or device side effect. The CPU records the rejected address.
 | 0x01000000–0x0123FFFF | Working video memory | Read/write, 8/16/32 bits |
 | 0x02000000–0x02000047 | GPU registers | Defined registers only, 32 bits |
 | 0x02001000–0x0200107F | Input registers | Defined registers only, 32 bits |
+| 0x02001100–0x0200117B | Second input bank | Defined registers only, 32 bits |
 | 0x02002000–0x02002003 | Clock low word | Read-only, aligned 32 bits |
 
 All other addresses are unmapped. Code memory is not mapped on the data bus.
@@ -171,9 +172,9 @@ The GPU register range extends through 0x02000047. New registers are aligned
 | 0x38 | Q1 | Unsigned reciprocal depth for first vertex |
 | 0x3C | Q2 | Unsigned reciprocal depth for second vertex |
 | 0x40 | Q3 | Unsigned reciprocal depth for third vertex |
-| 0x44 | DEPTH | 0 disables depth testing/writes; 1 enables both |
+| 0x44 | DEPTH | 0 disables depth testing/writes; 1 enables both; 2 tests without writing depth |
 
-DEPTH writes other than 0 or 1 fault. COMMAND=5 (TRIANGLE) fills the triangle
+DEPTH writes other than 0, 1, or 2 fault. COMMAND=5 (TRIANGLE) fills the triangle
 (X,Y), (X2,Y2), (X3,Y3) using COLOR. Either winding is accepted; zero-area triangles
 have no effect. The rasterizer clamps the bounding box to the viewport before
 iteration. Samples are at pixel centers (x+0.5,y+0.5). Barycentric weights must
@@ -186,6 +187,9 @@ scale; the flight program uses floor(1,000,000/camera_z). Zero depth does not pa
 an initially cleared depth buffer. Depth is internal GPU state, not bus-mapped.
 CLEAR resets it to zero along with the working color image. PRESENT copies color
 only. With depth disabled, commands overwrite color without changing depth.
+In mode 2, LINE and TRIANGLE still require Q to exceed the stored scene depth,
+but leave that depth unchanged. This allows an overlay's opaque background and
+text at the same Q to draw over each other while remaining behind nearer geometry.
 
 LINE also supports DEPTH, interpolating Q1/Q2 along the clipped screen segment.
 PIXEL remains an unconditional color write; its behavior is unchanged. HUD lines
@@ -203,8 +207,12 @@ keys have no special host-side UI behavior; the guest implements their actions.
 
 The original eight keys retain their addresses. Key T has identifier 8 and occupies
 slot 0 of bank 1 at INPUT_BASE+0x100. Each bank has eight slots and the same four
-register blocks: HELD +0x00, PRESSED +0x20, RELEASED +0x40, ACK +0x60. T occupies slot 0; F (identifier 9) occupies slot 1. Other slots fault. The gaps between banks remain
-unmapped. SDL T/F events update this device state; cruise semantics belong to the
+register blocks: HELD +0x00, PRESSED +0x20, RELEASED +0x40, ACK +0x60.
+T occupies slot 0; F (identifier 9) occupies slot 1; G (identifier 10) occupies
+slot 2; S (identifier 11) occupies slot 3; C (identifier 12) occupies slot 4;
+L (identifier 13) occupies slot 5; R (identifier 14) occupies slot 6. Slot 7 faults.
+The gaps between banks remain unmapped. SDL T/F/G/S/C/L/R events update this device
+state; cruise, destination groups, scanning, and rock guidance belong to the
 guest, not the frontend.
 
 ## Guest clock readout
